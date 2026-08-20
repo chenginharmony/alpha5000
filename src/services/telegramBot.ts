@@ -81,6 +81,8 @@ const MAIN_INLINE_KEYBOARD: InlineKeyboardMarkup = {
       { text: '💰 Fees', callback_data: 'nav:fees' },
     ],
     [
+      { text: '🌐 Terminal', url: 'https://anyalpha.fun' },
+      { text: '🐦 Twitter / X', url: 'https://x.com/getanyalpha' },
       { text: '🔄 Refresh', callback_data: 'nav:main' },
     ],
   ],
@@ -430,7 +432,10 @@ async function showMainMenu(chatId: number, customText?: string) {
       `• TP: *+${Number(settings?.takeProfit || 50).toFixed(0)}%* | SL: *${Number(settings?.stopLoss || -30).toFixed(0)}%* | Slippage: *2.0%*\n` +
       `• Tracked Whales: *${watchedCount}* | Active Positions: *${holdingsCount}*\n\n` +
       `👥 *Your Referral Link (Earn 20% Fees + 200 AP):*\n` +
-      `\`${refStats.referralLink}\``;
+      `\`${refStats.referralLink}\`\n\n` +
+      `🌐 *Official Links:*\n` +
+      `• Terminal: [anyalpha.fun](https://anyalpha.fun)\n` +
+      `• Twitter/X: [@getanyalpha](https://x.com/getanyalpha)`;
 
     await bot.sendMessage(chatId, msg, {
       parse_mode: 'Markdown',
