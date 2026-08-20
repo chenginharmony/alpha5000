@@ -283,4 +283,25 @@ model PointsLedger {
   @@index([createdAt])
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MULTI-USER EMBEDDED SOLANA WALLET SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+model UserWallet {
+  id                   String   @id @default(cuid())
+  userChatId           String   @unique
+  publicKey            String   @unique
+  encryptedPrivateKey  String
+  iv                   String
+  authTag              String
+  lastBalanceSol       Decimal  @default(0) @db.Decimal(18, 9)
+  lastBalanceUsd       Decimal  @default(0) @db.Decimal(18, 4)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([publicKey])
+}
+
+
 

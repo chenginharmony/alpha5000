@@ -32,7 +32,6 @@ export async function getOrCreateReferralUser(
   });
 
   if (!user) {
-    // Check if referrer exists and is not self
     let validReferrer: string | undefined = undefined;
     if (referrerStr && referrerStr !== chatIdStr) {
       const refExists = await prisma.referralUser.findUnique({
@@ -43,22 +42,35 @@ export async function getOrCreateReferralUser(
       }
     }
 
-    user = await prisma.referralUser.create({
-      data: {
-        userChatId: chatIdStr,
-        username: username || null,
-        firstName: firstName || null,
-        referredBy: validReferrer || null,
-      },
-    });
+    try {
+      user = await prisma.referralUser.create({
+        data: {
+          userChatId: chatIdStr,
+          username: username || null,
+          firstName: firstName || null,
+          referredBy: validReferrer || null,
+        },
+      });
+    } catch {
+      user = await prisma.referralUser.findUnique({
+        where: { userChatId: chatIdStr },
+      });
+    }
   } else if ((username && user.username !== username) || (firstName && user.firstName !== firstName)) {
-    // Update name/username if changed
-    user = await prisma.referralUser.update({
+    try {
+      user = await prisma.referralUser.update({
+        where: { userChatId: chatIdStr },
+        data: {
+          username: username || user.username,
+          firstName: firstName || user.firstName,
+        },
+      });
+    } catch {}
+  }
+
+  if (!user) {
+    user = await prisma.referralUser.findUniqueOrThrow({
       where: { userChatId: chatIdStr },
-      data: {
-        username: username || user.username,
-        firstName: firstName || user.firstName,
-      },
     });
   }
 

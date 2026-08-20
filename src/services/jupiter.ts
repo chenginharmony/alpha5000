@@ -12,7 +12,7 @@ import { prisma } from '../db';
 
 import bs58 from 'bs58';
 
-const connection = new Connection(config.SOLANA_RPC_URL, 'confirmed');
+export const connection = new Connection(config.SOLANA_RPC_URL, 'confirmed');
 
 function loadKeypair(keyStr: string): Keypair {
   const trimmed = keyStr.trim();
@@ -117,9 +117,11 @@ async function getFeeAccount(outputMint: string): Promise<string | undefined> {
 export async function executeBuy(
   tokenMint: string,
   usdAmount: number,
-  slippageBps: number = config.MAX_SLIPPAGE_BPS
+  slippageBps: number = config.MAX_SLIPPAGE_BPS,
+  customKeypair?: Keypair
 ): Promise<{ success: boolean; txid?: string; error?: string; tokenAmount?: number; feeAmount?: number }> {
   const startTime = Date.now();
+  const signerWallet = customKeypair || wallet;
 
   try {
     // Convert USD to lamports
@@ -164,7 +166,7 @@ export async function executeBuy(
     // 3. Get swap transaction
     const swapBody: any = {
       quoteResponse: quoteData,
-      userPublicKey: wallet.publicKey.toBase58(),
+      userPublicKey: signerWallet.publicKey.toBase58(),
       wrapAndUnwrapSol: true,
       dynamicComputeUnitLimit: true,
       prioritizationFeeLamports: {
@@ -196,7 +198,7 @@ export async function executeBuy(
 
     // 4. Deserialize, sign, send
     const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
-    transaction.sign([wallet]);
+    transaction.sign([signerWallet]);
 
     const rawTransaction = transaction.serialize();
     const txid = await connection.sendRawTransaction(rawTransaction, {
@@ -223,13 +225,12 @@ export async function executeBuy(
     return {
       success: true,
       txid,
-      tokenAmount: Number(quoteData.outAmount) / Math.pow(10, quoteData.outputMintDecimals || 6),
+      tokenAmount: Number(quoteData.outAmount),
       feeAmount,
     };
 
   } catch (error) {
-    const elapsed = Date.now() - startTime;
-    console.error(`❌ Buy failed after ${elapsed}ms:`, (error as Error).message);
+    console.error('❌ Buy failed:', (error as Error).message);
     return { success: false, error: (error as Error).message };
   }
 }
@@ -242,9 +243,11 @@ export async function executeSell(
   tokenMint: string,
   tokenAmount: number,
   decimals: number = 6,
-  slippageBps: number = config.MAX_SLIPPAGE_BPS
+  slippageBps: number = config.MAX_SLIPPAGE_BPS,
+  customKeypair?: Keypair
 ): Promise<{ success: boolean; txid?: string; error?: string; solReceived?: number }> {
   const startTime = Date.now();
+  const signerWallet = customKeypair || wallet;
 
   try {
     const tokenAmountRaw = Math.floor(tokenAmount * Math.pow(10, decimals));
@@ -275,7 +278,7 @@ export async function executeSell(
     // 2. Get swap transaction
     const swapBody: any = {
       quoteResponse: quoteData,
-      userPublicKey: wallet.publicKey.toBase58(),
+      userPublicKey: signerWallet.publicKey.toBase58(),
       wrapAndUnwrapSol: true,
       dynamicComputeUnitLimit: true,
       prioritizationFeeLamports: {
@@ -301,7 +304,7 @@ export async function executeSell(
     const transaction = VersionedTransaction.deserialize(
       Buffer.from(swapData.swapTransaction, 'base64')
     );
-    transaction.sign([wallet]);
+    transaction.sign([signerWallet]);
 
     const txid = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: true,

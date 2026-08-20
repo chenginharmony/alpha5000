@@ -25,7 +25,9 @@ type UserStep =
   | 'await_manual_token'
   | 'await_manual_amount'
   | 'await_sell_select'
-  | 'await_payout_wallet';
+  | 'await_payout_wallet'
+  | 'await_withdraw_address'
+  | 'await_withdraw_amount';
 
 interface UserState {
   step: UserStep;
@@ -52,8 +54,8 @@ function clearState(chatId: number) {
 
 const MAIN_MENU: ReplyKeyboardMarkup = {
   keyboard: [
-    [{ text: '📊 Portfolio' }, { text: '🐋 Wallets' }, { text: '⚙️ Settings' }],
-    [{ text: '🏆 Leaderboard' }, { text: '📈 Stats' }, { text: '🛒 Manual Trade' }],
+    [{ text: '👛 My Wallet' }, { text: '📊 Portfolio' }, { text: '⚙️ Settings' }],
+    [{ text: '🐋 Wallets' }, { text: '🏆 Leaderboard' }, { text: '🛒 Manual Trade' }],
     [{ text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }, { text: '💰 Fees' }],
     [{ text: '🔄 Refresh' }],
   ],
@@ -64,13 +66,13 @@ const MAIN_MENU: ReplyKeyboardMarkup = {
 const MAIN_INLINE_KEYBOARD: InlineKeyboardMarkup = {
   inline_keyboard: [
     [
+      { text: '👛 My Wallet', callback_data: 'nav:user_wallet' },
       { text: '📊 Portfolio', callback_data: 'nav:portfolio' },
-      { text: '🐋 Wallets', callback_data: 'nav:wallets' },
       { text: '⚙️ Settings', callback_data: 'nav:settings' },
     ],
     [
+      { text: '🐋 Wallets', callback_data: 'nav:wallets' },
       { text: '🏆 Leaderboard', callback_data: 'nav:leaderboard' },
-      { text: '📈 Stats', callback_data: 'nav:stats' },
       { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
     ],
     [
@@ -96,6 +98,48 @@ function inlineBackButton(menu: string): InlineKeyboardMarkup {
 // ═══════════════════════════════════════════════════════════════
 // MENU RENDERERS
 // ═══════════════════════════════════════════════════════════════
+
+async function showWallet(chatId: number) {
+  try {
+    const { getUserWalletInfo } = await import('./userWallet');
+    const info = await getUserWalletInfo(chatId);
+
+    const msg =
+      `👛 *My Solana Trading Wallet*\n\n` +
+      `Your dedicated embedded trading wallet on Solana:\n\n` +
+      `📍 *Your Deposit Address (Tap to copy):*\n` +
+      `\`${info.publicKey}\`\n\n` +
+      `💰 *Live Balance:*\n` +
+      `• *${info.balanceSol.toFixed(4)} SOL* (~$${info.balanceUsd.toFixed(2)} USD)\n` +
+      `• SOL Price: ~$${info.solPriceUsd.toFixed(2)}\n\n` +
+      `💡 _Deposit SOL to this address to copy-trade automatically or trade manually._\n` +
+      `_You can withdraw your funds or export your private key at any time._`;
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: '📥 Deposit SOL', callback_data: 'wallet:deposit' },
+          { text: '📤 Withdraw SOL', callback_data: 'wallet:withdraw' },
+        ],
+        [
+          { text: '🔑 Export Private Key', callback_data: 'wallet:export' },
+          { text: '🔄 Refresh Balance', callback_data: 'nav:user_wallet' },
+        ],
+        [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+      ],
+    };
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+      disable_web_page_preview: true,
+    });
+  } catch (e) {
+    await bot.sendMessage(chatId, `❌ Failed to load wallet: ${(e as Error).message}`, {
+      reply_markup: inlineBackButton('main'),
+    });
+  }
+}
 
 async function showPoints(chatId: number) {
   try {
@@ -806,6 +850,50 @@ bot.on('message', async (msg) => {
     case '/trade':
       await showManualTrade(chatId);
       break;
+    case '👛 My Wallet':
+    case '/wallet':
+    case '/wallets_user':
+      await showWallet(chatId);
+      break;
+    case '/deposit': {
+      const { getUserWalletInfo } = await import('./userWallet');
+      const info = await getUserWalletInfo(chatId);
+      await bot.sendMessage(
+        chatId,
+        `📥 *Deposit SOL to Alpha5000*\n\n` +
+        `Send SOL to your dedicated trading wallet:\n\n` +
+        `📍 *Address (Tap to copy):*\n` +
+        `\`${info.publicKey}\`\n\n` +
+        `⚡ _Deposits credit instantly on Solana!_`,
+        { parse_mode: 'Markdown', reply_markup: inlineBackButton('user_wallet') }
+      );
+      break;
+    }
+    case '/withdraw':
+      setState(chatId, 'await_withdraw_address');
+      await bot.sendMessage(
+        chatId,
+        `📤 *Withdraw SOL*\n\nEnter the recipient Solana wallet address (e.g. your Phantom or Solflare address):`,
+        { parse_mode: 'Markdown', reply_markup: BACK_MENU }
+      );
+      break;
+    case '/export': {
+      const keyboard: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          [{ text: '⚠️ Reveal Private Key', callback_data: 'wallet:export_confirm' }],
+          [{ text: '⬅️ Cancel', callback_data: 'nav:user_wallet' }],
+        ],
+      };
+      await bot.sendMessage(
+        chatId,
+        `🔐 *Export Private Key*\n\n` +
+        `⚠️ *WARNING: Never share your private key with anyone!*\n` +
+        `Anyone with this key can access and steal all funds in this wallet.\n\n` +
+        `Are you sure you want to reveal your private key?`,
+        { parse_mode: 'Markdown', reply_markup: keyboard }
+      );
+      break;
+    }
     case '🌟 AlphaPoints':
     case '/points':
     case '/alphapoints':
@@ -1041,6 +1129,58 @@ async function handleStatefulInput(chatId: number, text: string, state: UserStat
       await showReferrals(chatId);
       break;
     }
+
+    case 'await_withdraw_address': {
+      const address = text.trim();
+      if (address.length < 32) {
+        await bot.sendMessage(chatId, '❌ Invalid Solana address. Try again or tap Back.', {
+          reply_markup: BACK_MENU,
+        });
+        return;
+      }
+      setState(chatId, 'await_withdraw_amount', { destinationAddress: address });
+      await bot.sendMessage(chatId, `📍 Destination: \`${address}\`\n\nEnter SOL amount to withdraw (e.g. 0.5):`, {
+        parse_mode: 'Markdown',
+        reply_markup: BACK_MENU,
+      });
+      break;
+    }
+
+    case 'await_withdraw_amount': {
+      const amount = parseFloat(text);
+      if (isNaN(amount) || amount <= 0) {
+        await bot.sendMessage(chatId, '❌ Invalid amount. Try again:', {
+          reply_markup: BACK_MENU,
+        });
+        return;
+      }
+      const destination = state.tempData?.destinationAddress;
+      clearState(chatId);
+
+      await bot.sendMessage(chatId, `⏳ Processing withdrawal of ${amount} SOL to \`${destination.slice(0, 6)}...${destination.slice(-6)}\`...`, {
+        parse_mode: 'Markdown',
+        reply_markup: MAIN_MENU,
+      });
+
+      const { withdrawSol } = await import('./userWallet');
+      const res = await withdrawSol(chatId, destination, amount);
+
+      if (res.success && res.txid) {
+        await bot.sendMessage(
+          chatId,
+          `✅ *Withdrawal Complete!*\n\n` +
+          `Amount: *${amount} SOL*\n` +
+          `Destination: \`${destination}\`\n` +
+          `Tx: [Solscan](https://solscan.io/tx/${res.txid})`,
+          { parse_mode: 'Markdown', disable_web_page_preview: true, reply_markup: MAIN_MENU }
+        );
+      } else {
+        await bot.sendMessage(chatId, `❌ Withdrawal failed: ${res.error || 'Unknown error'}`, {
+          reply_markup: MAIN_MENU,
+        });
+      }
+      break;
+    }
   }
 }
 
@@ -1065,6 +1205,69 @@ bot.on('callback_query', async (query) => {
   if (data === 'nav:main') {
     if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
     await showMainMenu(chatId);
+    return;
+  }
+
+  if (data === 'nav:user_wallet') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showWallet(chatId);
+    return;
+  }
+
+  if (data === 'wallet:deposit') {
+    const { getUserWalletInfo } = await import('./userWallet');
+    const info = await getUserWalletInfo(chatId);
+    await bot.sendMessage(
+      chatId,
+      `📥 *Deposit SOL to Alpha5000*\n\n` +
+      `Send SOL from Phantom, Solflare, or Binance to your personal bot wallet:\n\n` +
+      `📍 *Address (Tap to copy):*\n` +
+      `\`${info.publicKey}\`\n\n` +
+      `⚡ _Deposits credit immediately on confirmation!_`,
+      { parse_mode: 'Markdown', reply_markup: inlineBackButton('user_wallet') }
+    );
+    return;
+  }
+
+  if (data === 'wallet:withdraw') {
+    setState(chatId, 'await_withdraw_address');
+    await bot.sendMessage(
+      chatId,
+      `📤 *Withdraw SOL*\n\nEnter the recipient Solana wallet address (e.g. your Phantom or Solflare address):`,
+      { parse_mode: 'Markdown', reply_markup: BACK_MENU }
+    );
+    return;
+  }
+
+  if (data === 'wallet:export') {
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [{ text: '⚠️ Reveal Private Key', callback_data: 'wallet:export_confirm' }],
+        [{ text: '⬅️ Cancel', callback_data: 'nav:user_wallet' }],
+      ],
+    };
+    await bot.sendMessage(
+      chatId,
+      `🔐 *Export Private Key*\n\n` +
+      `⚠️ *WARNING: Never share your private key with anyone!*\n` +
+      `Anyone with this key can access and steal all funds in this wallet.\n\n` +
+      `Are you sure you want to reveal your private key?`,
+      { parse_mode: 'Markdown', reply_markup: keyboard }
+    );
+    return;
+  }
+
+  if (data === 'wallet:export_confirm') {
+    const { exportPrivateKey } = await import('./userWallet');
+    const privKey = await exportPrivateKey(chatId);
+    await bot.sendMessage(
+      chatId,
+      `🔑 *Your Private Key (Base58):*\n\n` +
+      `\`${privKey}\`\n\n` +
+      `💡 _You can import this into Phantom (Add / Connect Wallet -> Import Private Key)._\n` +
+      `⚠️ *Delete this message after saving!*`,
+      { parse_mode: 'Markdown', reply_markup: inlineBackButton('user_wallet') }
+    );
     return;
   }
 
@@ -1363,17 +1566,50 @@ bot.on('callback_query', async (query) => {
     const budget = parseFloat(parts[2]);
 
     await bot.editMessageText(
-      `⏳ *Executing copy trade...*\nToken: ${tokenMint.slice(0, 6)}...`,
+      `⏳ *Executing copy trade...*\nToken: \`${tokenMint.slice(0, 6)}...${tokenMint.slice(-6)}\``,
       { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown' }
     );
 
-    const result = await executeBuy(tokenMint, budget);
+    let userKeypair;
+    try {
+      const { getUserWalletKeypair, getUserWalletInfo } = await import('./userWallet');
+      const info = await getUserWalletInfo(chatId);
+      if (info.balanceSol < 0.002) {
+        await bot.editMessageText(
+          `❌ *Insufficient SOL Balance*\n\n` +
+          `Your bot wallet balance: *${info.balanceSol.toFixed(4)} SOL* (~$${info.balanceUsd.toFixed(2)})\n\n` +
+          `Please deposit SOL to your personal bot address:\n\`${info.publicKey}\``,
+          {
+            chat_id: chatId,
+            message_id: msgId,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📥 Deposit SOL', callback_data: 'wallet:deposit' }],
+                [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+              ],
+            },
+          }
+        );
+        return;
+      }
+      userKeypair = await getUserWalletKeypair(chatId);
+    } catch {}
+
+    const result = await executeBuy(tokenMint, budget, undefined, userKeypair);
 
     if (result.success && result.txid) {
+      // Award AlphaPoints for copy-trade
+      try {
+        const { awardPoints } = await import('./points');
+        await awardPoints(chatId, 'COPY_TRADE', 100, `⚡ Copy-traded ${tokenMint.slice(0, 6)} ($${budget.toFixed(2)})`);
+      } catch {}
+
       await bot.editMessageText(
         `✅ *COPY TRADE EXECUTED*\n\n` +
         `Token: \`${tokenMint.slice(0, 6)}...${tokenMint.slice(-6)}\`\n` +
         `Amount: $${budget.toFixed(2)}\n` +
+        `🌟 *Reward:* +100 AlphaPoints!\n` +
         `Tx: [Solscan](https://solscan.io/tx/${result.txid})`,
         {
           chat_id: chatId,
@@ -1483,6 +1719,9 @@ bot.onText(/\/start/, async (msg) => {
 
       const { getOrCreateUserPoints } = await import('./points');
       await getOrCreateUserPoints(chatId, msg.from?.username, msg.from?.first_name);
+
+      const { getOrCreateUserWallet } = await import('./userWallet');
+      await getOrCreateUserWallet(chatId);
     } catch {}
   }
 

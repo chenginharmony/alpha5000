@@ -193,12 +193,23 @@ export async function handleHeliusWebhook(payload: HeliusWebhookPayload): Promis
 
 export async function setupHeliusWebhook(webhookUrl: string): Promise<void> {
   try {
+    const [personalWallets, groupWallets] = await Promise.all([
+      prisma.watchedWallet.findMany({ where: { isActive: true }, select: { address: true } }),
+      prisma.groupWallet.findMany({ where: { isActive: true }, select: { address: true } }),
+    ]);
+
+    const allAddresses = Array.from(new Set([
+      ...personalWallets.map(w => w.address),
+      ...groupWallets.map(w => w.address),
+      'MfDuWeqSHEqTFVYZ7LoexgAK9dxk7cy4DFJWjWMGVWa', // Top verified Solana whale fallback
+    ]));
+
     const res = await fetch('https://api.helius.xyz/v0/webhooks?api-key=' + config.HELIUS_API_KEY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         webhookURL: webhookUrl,
-        accountAddresses: [],
+        accountAddresses: allAddresses,
         transactionTypes: ['ANY'],
         webhookType: 'enhanced',
         authHeader: config.WEBHOOK_SECRET,
