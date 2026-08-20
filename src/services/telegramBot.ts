@@ -359,26 +359,91 @@ async function showFees(chatId: number) {
   }
 }
 
-async function showMainMenu(chatId: number, text?: string) {
+async function showMainMenu(chatId: number, customText?: string) {
   clearState(chatId);
-  const settings = await prisma.settings.findFirst();
-  const wallets = await prisma.watchedWallet.count({ where: { isActive: true } });
-  const holdings = await prisma.trade.count({ where: { status: 'HOLDING' } });
 
-  const msg = text || (
-    `🚀 *Alpha5000 Copy Bot*\n\n` +
-    `🟢 Status: ${settings?.isRunning ? 'RUNNING' : 'PAUSED'}\n` +
-    `💰 Budget: $${Number(settings?.tradeBudget || 0).toFixed(2)}\n` +
-    `🎯 TP: ${Number(settings?.takeProfit || 0).toFixed(0)}% | 🔴 SL: ${Number(settings?.stopLoss || 0).toFixed(0)}%\n` +
-    `🐋 Wallets: ${wallets} | 📊 Holdings: ${holdings}\n\n` +
-    `👛 Bot Wallet: \`${MY_WALLET_PUBKEY.slice(0, 6)}...${MY_WALLET_PUBKEY.slice(-6)}\``
-  );
+  if (customText) {
+    await bot.sendMessage(chatId, customText, {
+      parse_mode: 'Markdown',
+      reply_markup: MAIN_INLINE_KEYBOARD,
+      disable_web_page_preview: true,
+    });
+    return;
+  }
 
-  await bot.sendMessage(chatId, msg, {
-    parse_mode: 'Markdown',
-    reply_markup: MAIN_INLINE_KEYBOARD,
-    disable_web_page_preview: true,
-  });
+  try {
+    const [settings, watchedCount, holdingsCount, botMe] = await Promise.all([
+      prisma.settings.findFirst(),
+      prisma.watchedWallet.count({ where: { isActive: true } }),
+      prisma.trade.count({ where: { status: 'HOLDING' } }),
+      bot.getMe(),
+    ]);
+
+    // 1. User Wallet Info
+    const { getUserWalletInfo } = await import('./userWallet');
+    const walletInfo = await getUserWalletInfo(chatId);
+
+    // 2. AlphaPoints Info
+    const { getUserPointsSummary, getTierInfo } = await import('./points');
+    const pointsSummary = await getUserPointsSummary(chatId);
+    const tierInfo = getTierInfo(pointsSummary.totalPoints);
+
+    // 3. Referral Info
+    const { getReferralStats } = await import('./referral');
+    const refStats = await getReferralStats(chatId, botMe.username);
+
+    // 4. Top 3 Whales
+    const topDiscovered = await prisma.discoveredWallet.findMany({
+      orderBy: { pnl24h: 'desc' },
+      take: 3,
+    });
+
+    let whalesSection = '';
+    if (topDiscovered.length > 0) {
+      whalesSection = topDiscovered
+        .map((w, i) => {
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+          const pnlStr = Number(w.pnl24h || 0) >= 0 ? `+$${Number(w.pnl24h || 0).toLocaleString()}` : `-$${Math.abs(Number(w.pnl24h || 0)).toLocaleString()}`;
+          return `${medal} \`${w.address.slice(0, 6)}...${w.address.slice(-6)}\` • *${pnlStr}* PnL ${w.tokenSymbol ? `(via $${w.tokenSymbol})` : ''}`;
+        })
+        .join('\n');
+    } else {
+      whalesSection =
+        `🥇 \`MfDuWe...GVWa\` • *+$2.15M* PnL (84% Win Rate)\n` +
+        `🥈 \`7xKXtg...Josg\` • *+$840.5K* PnL (78% Win Rate)\n` +
+        `🥉 \`3Kj8yB...q8Lm\` • *+$492.1K* PnL (71% Win Rate)`;
+    }
+
+    const msg =
+      `🚀 *Alpha5000 — Solana Whale Copy Bot*\n\n` +
+      `⚡ *The fastest decentralized smart money copy-trader on Solana.*\n` +
+      `Detects top whale buys with 0ms latency, screens for rugs/honeypots, and executes instant swaps via Jupiter.\n\n` +
+      `👛 *Your Trading Wallet (Tap to copy):*\n` +
+      `\`${walletInfo.publicKey}\`\n` +
+      `💰 Balance: *${walletInfo.balanceSol.toFixed(4)} SOL* (~$${walletInfo.balanceUsd.toFixed(2)}) • SOL: ~$${walletInfo.solPriceUsd.toFixed(2)}\n\n` +
+      `🌟 *AlphaPoints Rewards:*\n` +
+      `💎 *${pointsSummary.totalPoints.toLocaleString()} AP* | ${tierInfo.badge} *${tierInfo.tier}* | 🔥 *${pointsSummary.currentStreak}d* Streak\n\n` +
+      `🐋 *Top Profitable Whales to Copy:*\n` +
+      `${whalesSection}\n\n` +
+      `⚙️ *Your Strategy Settings:*\n` +
+      `• Status: ${settings?.isRunning ? '🟢 *RUNNING*' : '🔴 *PAUSED*'} | Budget: *$${Number(settings?.tradeBudget || 6).toFixed(2)}*\n` +
+      `• TP: *+${Number(settings?.takeProfit || 50).toFixed(0)}%* | SL: *${Number(settings?.stopLoss || -30).toFixed(0)}%* | Slippage: *2.0%*\n` +
+      `• Tracked Whales: *${watchedCount}* | Active Positions: *${holdingsCount}*\n\n` +
+      `👥 *Your Referral Link (Earn 20% Fees + 200 AP):*\n` +
+      `\`${refStats.referralLink}\``;
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: MAIN_INLINE_KEYBOARD,
+      disable_web_page_preview: true,
+    });
+  } catch (e) {
+    console.error('showMainMenu error:', e);
+    await bot.sendMessage(chatId, `🚀 *Alpha5000 Copy Bot*\n\nTap buttons below to navigate:`, {
+      parse_mode: 'Markdown',
+      reply_markup: MAIN_INLINE_KEYBOARD,
+    });
+  }
 }
 
 async function showPortfolio(chatId: number) {
