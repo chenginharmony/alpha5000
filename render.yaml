@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: alpha5000-bot
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: HELIUS_API_KEY
+        sync: false
+      - key: PRIVATE_KEY_BASE58
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: MOBULA_API_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: TRADE_BUDGET_USD
+        value: "6.00"
+      - key: TAKE_PROFIT_PERCENT
+        value: "50"
+      - key: STOP_LOSS_PERCENT
+        value: "-30"
+      - key: MAX_SLIPPAGE_BPS
+        value: "200"
+      - key: MIN_WHALE_BUY_USD
+        value: "100"
+      - key: PLATFORM_FEE_BPS
+        value: "20"

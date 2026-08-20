@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+.env.local
+*.log
+.DS_Store
+*.pem
+*.key
+.system_generated/
