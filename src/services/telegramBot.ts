@@ -845,7 +845,7 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
 
     msg += `\n${medal} \`${w.address}\`${tags}\n`;
     msg += `   💰 24h P&L: ${pnlEmoji} *$${Number(w.pnl24h || 0).toLocaleString()}*`;
-    if (w.tokenSymbol) msg += ` | Via *$${w.tokenSymbol}*`;
+    if (w.tokenSymbol && w.tokenSymbol !== 'UNKNOWN') msg += ` | Via *$${w.tokenSymbol}*`;
     msg += `\n`;
     if (w.volume24h) {
       msg += `   📊 Volume: $${Number(w.volume24h).toLocaleString()} | Trades: ${w.tradeCount24h || 0}\n`;
@@ -855,10 +855,20 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
     }
   }
 
-  msg += `\n💡 _Tap below to view full leaderboard and copy these whales:_`;
+  msg += `\n💡 _Tap buttons below to track these wallets & receive live copy-trade alerts:_`;
+
+  const trackRow: any[] = [];
+  topWallets.slice(0, 3).forEach((w, i) => {
+    trackRow.push({
+      text: `➕ Track #${i + 1}`,
+      callback_data: `disc:track:${w.address}`,
+    });
+  });
 
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
+      trackRow,
+      [{ text: '⚡ Track All Top 3 Whales (+150 AP)', callback_data: 'disc:track_all' }],
       [
         { text: '🏆 Wallet Leaderboard', callback_data: 'nav:leaderboard' },
         { text: '🔍 Discover More', callback_data: 'discovery:run' },
@@ -1465,6 +1475,62 @@ bot.on('callback_query', async (query) => {
       parse_mode: 'Markdown',
       reply_markup: inlineBackButton('referrals'),
     });
+    return;
+  }
+
+  // 1-Tap Track Discovered Whale
+  if (data.startsWith('disc:track:')) {
+    const address = data.replace('disc:track:', '').trim();
+    await prisma.watchedWallet.upsert({
+      where: { address },
+      update: { isActive: true },
+      create: { address, label: 'Discovered Whale' },
+    });
+
+    try {
+      const { awardPoints } = await import('./points');
+      await awardPoints(chatId, 'WHALE_TRACK', 50, `🐋 Added whale to tracker: ${address.slice(0, 6)}...${address.slice(-4)}`);
+    } catch {}
+
+    await bot.sendMessage(
+      chatId,
+      `✅ *Whale Wallet Added to Tracker!*\n\n` +
+      `📍 \`${address}\`\n\n` +
+      `⚡ *Live Alerting Active:* You will receive instant copy alerts whenever this whale buys on Solana.\n` +
+      `🌟 *+50 AlphaPoints* awarded to your account!`,
+      { parse_mode: 'Markdown', reply_markup: inlineBackButton('main') }
+    );
+    return;
+  }
+
+  // 1-Tap Track All Top 3 Discovered Whales
+  if (data === 'disc:track_all') {
+    const topWallets = await prisma.discoveredWallet.findMany({
+      where: { isAdded: false },
+      orderBy: { pnl24h: 'desc' },
+      take: 3,
+    });
+
+    for (const w of topWallets) {
+      await prisma.watchedWallet.upsert({
+        where: { address: w.address },
+        update: { isActive: true },
+        create: { address: w.address, label: `Discovered Whale (${w.tokenSymbol || 'Alpha'})` },
+      });
+    }
+
+    try {
+      const { awardPoints } = await import('./points');
+      await awardPoints(chatId, 'WHALE_TRACK', 150, `🐋 Tracked top 3 discovered whales`);
+    } catch {}
+
+    await bot.sendMessage(
+      chatId,
+      `✅ *All 3 Top Whales Added to Tracker!*\n\n` +
+      `You will receive instant copy alerts whenever any of these whales buy on Solana.\n` +
+      `🌟 *+150 AlphaPoints* awarded to your account!`,
+      { parse_mode: 'Markdown', reply_markup: inlineBackButton('main') }
+    );
     return;
   }
 

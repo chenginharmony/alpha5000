@@ -209,7 +209,7 @@ export async function fetchTrendingTokens(limit: number = 20): Promise<MobulaTre
   return fetchDexScreenerTrending();
 }
 
-// Fallback: DexScreener trending
+// Fallback: DexScreener trending with full metadata resolution
 export async function fetchDexScreenerTrending(): Promise<MobulaTrendingToken[]> {
   try {
     const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1', {
@@ -218,12 +218,23 @@ export async function fetchDexScreenerTrending(): Promise<MobulaTrendingToken[]>
     if (!res.ok) return [];
 
     const data = await res.json();
-    return (data || [])
+    const solTokens = (data || [])
       .filter((t: any) => t.chainId === 'solana')
-      .slice(0, 20)
-      .map((t: any) => ({
+      .slice(0, 15);
+
+    if (solTokens.length === 0) return [];
+
+    const mints = solTokens.map((t: any) => t.tokenAddress).filter(Boolean);
+
+    // Batch resolve token metadata, symbols, and prices from DexScreener
+    const pairRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mints.join(',')}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!pairRes.ok) {
+      return solTokens.map((t: any) => ({
         address: t.tokenAddress,
-        symbol: t.symbol || 'UNKNOWN',
+        symbol: t.symbol || 'SOL',
         name: t.name || '',
         volume24hUSD: 0,
         liquidity: 0,
@@ -231,6 +242,31 @@ export async function fetchDexScreenerTrending(): Promise<MobulaTrendingToken[]>
         priceChange24hPercent: 0,
         marketCap: 0,
       }));
+    }
+
+    const pairData = await pairRes.json();
+    const pairs = pairData.pairs || [];
+
+    const tokenMap = new Map<string, MobulaTrendingToken>();
+
+    for (const p of pairs) {
+      if (p.chainId !== 'solana' || !p.baseToken?.address) continue;
+      const addr = p.baseToken.address;
+      if (!tokenMap.has(addr)) {
+        tokenMap.set(addr, {
+          address: addr,
+          symbol: p.baseToken.symbol || 'SOL',
+          name: p.baseToken.name || '',
+          volume24hUSD: Number(p.volume?.h24 || 0),
+          liquidity: Number(p.liquidity?.usd || 0),
+          price: Number(p.priceUsd || 0),
+          priceChange24hPercent: Number(p.priceChange?.h24 || 0),
+          marketCap: Number(p.marketCap || p.fdv || 0),
+        });
+      }
+    }
+
+    return Array.from(tokenMap.values());
   } catch (e) {
     console.error('DexScreener trending failed:', (e as Error).message);
     return [];

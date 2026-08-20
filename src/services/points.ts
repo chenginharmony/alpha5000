@@ -9,7 +9,8 @@ export type PointsAction =
   | 'PROFIT_WIN'
   | 'REFERRAL_JOIN'
   | 'REFERRAL_TRADE'
-  | 'VOLUME_MILESTONE';
+  | 'VOLUME_MILESTONE'
+  | 'WHALE_TRACK';
 
 export interface UserPointsSummary {
   chatId: string;
