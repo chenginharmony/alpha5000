@@ -555,8 +555,21 @@ export async function getTrendingTokensList(limit: number = 10) {
 import cron from 'node-cron';
 
 export function startDiscoveryJobs(): void {
-  // Discover new wallets every 2 hours
-  cron.schedule('0 */2 * * *', async () => {
+  // Trigger immediate discovery scan on startup
+  setTimeout(async () => {
+    console.log('🚀 Running initial wallet discovery scan on startup...');
+    try {
+      const count = await discoverWalletsFromTrending();
+      if (count > 0) {
+        await sendDiscoveryNotification(count);
+      }
+    } catch (e) {
+      console.error('Initial discovery failed:', (e as Error).message);
+    }
+  }, 5000);
+
+  // Discover new wallets every 10 minutes for real-time alerts
+  cron.schedule('*/10 * * * *', async () => {
     console.log('⏰ Running scheduled wallet discovery...');
     try {
       const count = await discoverWalletsFromTrending();
@@ -568,8 +581,8 @@ export function startDiscoveryJobs(): void {
     }
   });
 
-  // Sync analytics every 30 minutes
-  cron.schedule('*/30 * * * *', async () => {
+  // Sync analytics every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
     console.log('⏰ Running scheduled analytics sync...');
     try {
       await syncTrackedWalletAnalytics();
@@ -578,5 +591,5 @@ export function startDiscoveryJobs(): void {
     }
   });
 
-  console.log('✅ Discovery jobs started (discovery: every 2h, analytics: every 30min)');
+  console.log('✅ Discovery jobs started (discovery: every 10min, analytics: every 15min)');
 }

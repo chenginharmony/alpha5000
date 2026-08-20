@@ -826,50 +826,65 @@ export function sendUrgentAlert(message: string): Promise<void> {
 }
 
 export async function sendDiscoveryNotification(count: number, wallets?: any[]): Promise<void> {
-  if (!CHAT_ID) return;
-
   const topWallets = wallets && wallets.length > 0 
     ? wallets 
     : await prisma.discoveredWallet.findMany({
         where: { isAdded: false },
         orderBy: { pnl24h: 'desc' },
-        take: 5,
+        take: 3,
       });
 
-  let msg = `🔍 *Wallet Discovery Alert*\n\n`;
-  msg += `Found *${count}* new high-performing whale wallets from trending tokens:\n`;
+  let msg = `🐋 *Live Whale Discovery Alert*\n\n`;
+  msg += `Detected *${count}* new high-performing smart money wallets on Solana:\n`;
 
-  for (let i = 0; i < Math.min(topWallets.length, 5); i++) {
+  for (let i = 0; i < Math.min(topWallets.length, 3); i++) {
     const w = topWallets[i];
     const tags = w.walletTags && w.walletTags.length > 0 ? ` [${w.walletTags.slice(0, 2).join(', ')}]` : '';
     const pnlEmoji = Number(w.pnl24h || 0) >= 0 ? '🟢' : '🔴';
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
 
-    msg += `\n${i + 1}. \`${w.address.slice(0, 6)}...${w.address.slice(-6)}\`${tags}\n`;
-    msg += `   💰 24h P&L: ${pnlEmoji} $${Number(w.pnl24h || 0).toFixed(0)}`;
-    if (w.tokenSymbol) msg += ` | Via *${w.tokenSymbol}*`;
+    msg += `\n${medal} \`${w.address}\`${tags}\n`;
+    msg += `   💰 24h P&L: ${pnlEmoji} *$${Number(w.pnl24h || 0).toLocaleString()}*`;
+    if (w.tokenSymbol) msg += ` | Via *$${w.tokenSymbol}*`;
     msg += `\n`;
     if (w.volume24h) {
-      msg += `   📊 Volume: $${Number(w.volume24h).toFixed(0)} | Trades: ${w.tradeCount24h || 0}\n`;
+      msg += `   📊 Volume: $${Number(w.volume24h).toLocaleString()} | Trades: ${w.tradeCount24h || 0}\n`;
     }
     if (w.netWorthSol) {
       msg += `   💎 Net Worth: ${Number(w.netWorthSol).toFixed(2)} SOL\n`;
     }
   }
 
-  msg += `\n💡 _Tap below to view full details and track these wallets:_`;
+  msg += `\n💡 _Tap below to view full leaderboard and copy these whales:_`;
 
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
-      [{ text: '🏆 Open Leaderboard', callback_data: 'nav:leaderboard' }],
-      [{ text: '🔥 View Discovered Wallets', callback_data: 'discovery:view' }],
+      [
+        { text: '🏆 Wallet Leaderboard', callback_data: 'nav:leaderboard' },
+        { text: '🔍 Discover More', callback_data: 'discovery:run' },
+      ],
+      [{ text: '👛 My Wallet', callback_data: 'nav:user_wallet' }],
     ],
   };
 
-  await bot.sendMessage(CHAT_ID, msg, {
-    parse_mode: 'Markdown',
-    reply_markup: keyboard,
-    disable_web_page_preview: true,
-  });
+  // Broadcast to all users and groups
+  const [users, groups] = await Promise.all([
+    prisma.userPoints.findMany({ select: { userChatId: true } }),
+    prisma.group.findMany({ where: { isActive: true }, select: { groupId: true } }),
+  ]);
+
+  const targetChats = new Set<string>();
+  if (CHAT_ID) targetChats.add(String(CHAT_ID));
+  users.forEach(u => targetChats.add(u.userChatId));
+  groups.forEach(g => targetChats.add(g.groupId));
+
+  for (const chatId of targetChats) {
+    bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+      disable_web_page_preview: true,
+    }).catch(() => {});
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
