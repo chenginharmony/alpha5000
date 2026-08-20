@@ -1,9 +1,12 @@
 import fetch from 'cross-fetch';
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { prisma } from '../db';
 import { sendAlert, sendDiscoveryNotification } from './telegramBot';
+import { config } from '../config';
 
 const MOBULA_API_KEY = process.env.MOBULA_API_KEY;
 const MOBULA_BASE = 'https://api.mobula.io';
+const connection = new Connection(config.SOLANA_RPC_URL, 'confirmed');
 
 // ═══════════════════════════════════════════════════════════════
 // MOBULA API CALLS
@@ -378,6 +381,15 @@ export async function discoverWalletsFromTrending(): Promise<number> {
       });
       if (existing) continue;
 
+      // Fetch live on-chain SOL balance for accurate net worth
+      let onChainSol = 0;
+      try {
+        const lamports = await connection.getBalance(new PublicKey(trader.owner));
+        onChainSol = lamports / LAMPORTS_PER_SOL;
+      } catch {}
+
+      const netWorthSol = onChainSol > 0 ? onChainSol : (trader.solBalance || trader.netWorth || 0);
+
       // Skip if already discovered
       const existingDisc = await prisma.discoveredWallet.findFirst({
         where: { address: trader.owner, source: 'mobula_top_traders' },
@@ -391,7 +403,7 @@ export async function discoverWalletsFromTrending(): Promise<number> {
             volume24h: trader.volumeUsd,
             tradeCount24h: trader.trade,
             walletTags: trader.tags,
-            netWorthSol: trader.solBalance || trader.netWorth,
+            netWorthSol,
             tokenMint: token.address,
             tokenSymbol: token.symbol,
           },
@@ -410,7 +422,7 @@ export async function discoverWalletsFromTrending(): Promise<number> {
           volume24h: trader.volumeUsd,
           tradeCount24h: trader.trade,
           walletTags: trader.tags,
-          netWorthSol: trader.solBalance || trader.netWorth,
+          netWorthSol,
         },
       });
 

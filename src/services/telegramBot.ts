@@ -861,8 +861,11 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
     if (w.volume24h) {
       msg += `   📊 Volume: $${Number(w.volume24h).toLocaleString()} | Trades: ${w.tradeCount24h || 0}\n`;
     }
-    if (w.netWorthSol && Number(w.netWorthSol) > 0) {
-      msg += `   💎 Net Worth: ${Number(w.netWorthSol).toFixed(2)} SOL\n`;
+    const solVal = Number(w.netWorthSol || 0);
+    if (solVal > 0) {
+      msg += `   💎 Net Worth: *${solVal.toFixed(2)} SOL* (~$${(solVal * 185).toLocaleString(undefined, { maximumFractionDigits: 0 })})\n`;
+    } else {
+      msg += `   ⚡ Realized Profit: *+$${Number(w.pnl24h || 0).toLocaleString()}* (${w.tradeCount24h || 0} Trades)\n`;
     }
   }
 
