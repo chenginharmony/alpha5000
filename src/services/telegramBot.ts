@@ -159,24 +159,33 @@ async function showPoints(chatId: number) {
 async function showPointsLeaderboard(chatId: number) {
   try {
     const { getPointsLeaderboard } = await import('./points');
-    const leaders = await getPointsLeaderboard(10);
+    const { leaders, userRankInfo } = await getPointsLeaderboard(10, chatId);
 
-    let msg = `🏆 *AlphaPoints Leaderboard*\n\nTop traders ranked by AlphaPoints:\n\n`;
+    let msg = `🏆 *AlphaPoints Global Leaderboard*\n\nTop traders ranked by total AlphaPoints earned:\n\n`;
 
     if (leaders.length === 0) {
-      msg += `_No points recorded yet. Be the first to claim daily points!_`;
+      msg += `_No points recorded yet. Be the first to claim daily points!_\n\n`;
     } else {
       leaders.forEach((u) => {
         const medal = u.rank === 1 ? '🥇' : u.rank === 2 ? '🥈' : u.rank === 3 ? '🥉' : `#${u.rank}`;
         msg += `${medal} ${u.badge} *${u.username}*\n`;
-        msg += `   💎 *${u.totalPoints.toLocaleString()} AP* | ${u.tier} | 🔥 ${u.streak}d streak\n\n`;
+        msg += `   💎 *${u.totalPoints.toLocaleString()} AlphaPoints*\n`;
+        msg += `   🏅 Rank: ${u.tier} | 🔥 ${u.streak}d Streak\n\n`;
       });
+    }
+
+    if (userRankInfo) {
+      msg += `--------------------------------------------------\n`;
+      msg += `👉 *Your Ranking:* #${userRankInfo.rank} • ${userRankInfo.badge} *${userRankInfo.totalPoints.toLocaleString()} AP* (${userRankInfo.tier})\n`;
     }
 
     const keyboard: InlineKeyboardMarkup = {
       inline_keyboard: [
         [{ text: '🎁 Claim Daily Points', callback_data: 'points:claim' }],
-        [{ text: '🌟 My AlphaPoints Hub', callback_data: 'nav:points' }],
+        [
+          { text: '🌟 My AlphaPoints Hub', callback_data: 'nav:points' },
+          { text: '👥 Invite (+200 AP)', callback_data: 'nav:referrals' },
+        ],
         [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
       ],
     };
@@ -184,6 +193,7 @@ async function showPointsLeaderboard(chatId: number) {
     await bot.sendMessage(chatId, msg, {
       parse_mode: 'Markdown',
       reply_markup: keyboard,
+      disable_web_page_preview: true,
     });
   } catch (e) {
     await bot.sendMessage(chatId, `❌ Failed to load leaderboard: ${(e as Error).message}`, {

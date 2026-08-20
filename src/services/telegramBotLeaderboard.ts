@@ -15,14 +15,36 @@ import { InlineKeyboardMarkup } from 'node-telegram-bot-api';
 export async function showLeaderboard(chatId: number) {
   const { tracked, discovered } = await getWalletLeaderboard(15);
 
-  // Tracked Wallets Section
-  let msg = `🏆 *Wallet Leaderboard*\n\n`;
-  msg += `*Your Tracked Wallets (${tracked.length})*\n`;
+  let msg = `🏆 *Alpha5000 Global Leaderboards*\n\n`;
+
+  // 1. Top AlphaPoints Traders Section
+  try {
+    const { getPointsLeaderboard } = await import('./points');
+    const { leaders, userRankInfo } = await getPointsLeaderboard(5, chatId);
+
+    msg += `*🌟 Top AlphaPoints Traders*\n`;
+    if (leaders.length === 0) {
+      msg += `_No points recorded yet. Claim daily points to take #1!_\n\n`;
+    } else {
+      leaders.forEach((u) => {
+        const medal = u.rank === 1 ? '🥇' : u.rank === 2 ? '🥈' : u.rank === 3 ? '🥉' : `#${u.rank}`;
+        msg += `${medal} ${u.badge} *${u.username}*\n`;
+        msg += `   💎 *${u.totalPoints.toLocaleString()} AlphaPoints* | ${u.tier} | 🔥 ${u.streak}d streak\n\n`;
+      });
+    }
+
+    if (userRankInfo) {
+      msg += `👉 *Your Points:* #${userRankInfo.rank} • ${userRankInfo.badge} *${userRankInfo.totalPoints.toLocaleString()} AP*\n\n`;
+    }
+  } catch {}
+
+  // 2. Tracked Wallets Section
+  msg += `*🐋 Your Tracked Wallets (${tracked.length})*\n`;
 
   if (tracked.length === 0) {
     msg += `_No analytics yet. Add wallets and let the bot track them._\n\n`;
   } else {
-    for (let i = 0; i < Math.min(tracked.length, 10); i++) {
+    for (let i = 0; i < Math.min(tracked.length, 5); i++) {
       const w = tracked[i];
       const rank = w.rank || i + 1;
       const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`;
@@ -39,14 +61,14 @@ export async function showLeaderboard(chatId: number) {
     }
   }
 
-  // Discovered Wallets Section
+  // 3. Discovered Wallets Section
   msg += `*🔥 Hot Wallets to Track (${discovered.length})*\n`;
   msg += `_From trending tokens & top traders_\n\n`;
 
   if (discovered.length === 0) {
     msg += `_No discoveries yet. Run discovery or check back later._\n`;
   } else {
-    for (let i = 0; i < Math.min(discovered.length, 5); i++) {
+    for (let i = 0; i < Math.min(discovered.length, 3); i++) {
       const d = discovered[i];
       const tags = d.walletTags.length > 0 ? ` [${d.walletTags.slice(0, 2).join(', ')}]` : '';
       const pnlEmoji = Number(d.pnl24h || 0) >= 0 ? '🟢' : '🔴';
@@ -64,10 +86,15 @@ export async function showLeaderboard(chatId: number) {
 
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
-      [{ text: '🔍 Discover New Wallets', callback_data: 'discovery:run' }],
-      [{ text: '📈 Trending Tokens', callback_data: 'discovery:trending' }],
-      [{ text: '🔄 Sync Analytics', callback_data: 'discovery:sync' }],
-      [{ text: '⬅️ Back', callback_data: 'nav:main' }],
+      [
+        { text: '🌟 AlphaPoints Hub', callback_data: 'nav:points' },
+        { text: '🔍 Discover Wallets', callback_data: 'discovery:run' },
+      ],
+      [
+        { text: '📈 Trending Tokens', callback_data: 'discovery:trending' },
+        { text: '🔄 Sync Analytics', callback_data: 'discovery:sync' },
+      ],
+      [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
     ],
   };
 

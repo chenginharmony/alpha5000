@@ -48,11 +48,14 @@ async function testPoints() {
   summary.recentLedger.forEach((l) => console.log(`   • +${l.amount} AP: ${l.description}`));
 
   console.log('\n7️⃣ Fetching AlphaPoints Leaderboard...');
-  const leaderboard = await getPointsLeaderboard(5);
-  console.log(`🏆 Top Leaderboard Entries (${leaderboard.length}):`);
-  leaderboard.forEach((u) => {
-    console.log(`   #${u.rank} ${u.badge} ${u.username}: ${u.totalPoints} AP (${u.tier})`);
+  const { leaders, userRankInfo } = await getPointsLeaderboard(5, testChatId);
+  console.log(`🏆 Top Leaderboard Entries (${leaders.length}):`);
+  leaders.forEach((u) => {
+    console.log(`   #${u.rank} ${u.badge} ${u.username}: ${u.totalPoints.toLocaleString()} AlphaPoints (${u.tier}) | 🔥 ${u.streak}d streak`);
   });
+  if (userRankInfo) {
+    console.log(`👉 User Rank: #${userRankInfo.rank} with ${userRankInfo.totalPoints} AP (${userRankInfo.tier})`);
+  }
 
   // Cleanup test user
   await prisma.pointsLedger.deleteMany({ where: { userChatId: testChatId } });

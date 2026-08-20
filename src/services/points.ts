@@ -282,24 +282,47 @@ export async function getUserPointsSummary(
 }
 
 /**
- * Get Points Leaderboard
+ * Get Points Leaderboard with full rankings and caller position
  */
-export async function getPointsLeaderboard(limit: number = 10) {
+export async function getPointsLeaderboard(limit: number = 10, currentChatId?: string | number) {
   const topUsers = await prisma.userPoints.findMany({
     orderBy: { totalPoints: 'desc' },
     take: limit,
   });
 
-  return topUsers.map((u, i) => {
+  const leaders = topUsers.map((u, i) => {
     const tierInfo = getTierInfo(u.totalPoints);
     return {
       rank: i + 1,
       chatId: u.userChatId,
-      username: u.username || u.firstName || `Trader_${u.userChatId.slice(-4)}`,
+      username: u.username ? `@${u.username}` : (u.firstName || `Trader_${u.userChatId.slice(-4)}`),
       totalPoints: u.totalPoints,
       tier: tierInfo.tier,
       badge: tierInfo.badge,
       streak: u.currentStreak,
+      totalTrades: u.totalTrades,
+      totalReferrals: u.totalReferrals,
     };
   });
+
+  let userRankInfo: { rank: number; totalPoints: number; tier: string; badge: string; streak: number } | null = null;
+  if (currentChatId) {
+    const chatIdStr = String(currentChatId);
+    const user = await prisma.userPoints.findUnique({ where: { userChatId: chatIdStr } });
+    if (user) {
+      const higherCount = await prisma.userPoints.count({
+        where: { totalPoints: { gt: user.totalPoints } },
+      });
+      const tierInfo = getTierInfo(user.totalPoints);
+      userRankInfo = {
+        rank: higherCount + 1,
+        totalPoints: user.totalPoints,
+        tier: tierInfo.tier,
+        badge: tierInfo.badge,
+        streak: user.currentStreak,
+      };
+    }
+  }
+
+  return { leaders, userRankInfo };
 }
