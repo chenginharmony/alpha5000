@@ -242,3 +242,45 @@ model ReferralReward {
   @@index([referredChatId])
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ALPHAPOINTS GAMIFICATION & REWARDS SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+model UserPoints {
+  id                 String   @id @default(cuid())
+  userChatId         String   @unique
+  username           String?
+  firstName          String?
+  totalPoints        Int      @default(0)
+  currentStreak      Int      @default(0)
+  lastDailyClaim     DateTime?
+  totalTrades        Int      @default(0)
+  totalWins          Int      @default(0)
+  totalReferrals     Int      @default(0)
+  tier               String   @default("Bronze")
+
+  history            PointsLedger[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([totalPoints])
+}
+
+model PointsLedger {
+  id               String      @id @default(cuid())
+  userChatId       String
+  user             UserPoints  @relation(fields: [userChatId], references: [userChatId], onDelete: Cascade)
+  
+  amount           Int
+  action           String
+  description      String?
+  metadata         String?
+
+  createdAt        DateTime    @default(now())
+
+  @@index([userChatId])
+  @@index([createdAt])
+}
+
+

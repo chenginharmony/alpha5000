@@ -54,7 +54,8 @@ const MAIN_MENU: ReplyKeyboardMarkup = {
   keyboard: [
     [{ text: '📊 Portfolio' }, { text: '🐋 Wallets' }, { text: '⚙️ Settings' }],
     [{ text: '🏆 Leaderboard' }, { text: '📈 Stats' }, { text: '🛒 Manual Trade' }],
-    [{ text: '👥 Referrals' }, { text: '💰 Fees' }, { text: '🔄 Refresh' }],
+    [{ text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }, { text: '💰 Fees' }],
+    [{ text: '🔄 Refresh' }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -73,8 +74,11 @@ const MAIN_INLINE_KEYBOARD: InlineKeyboardMarkup = {
       { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
     ],
     [
+      { text: '🌟 AlphaPoints', callback_data: 'nav:points' },
       { text: '👥 Referrals', callback_data: 'nav:referrals' },
       { text: '💰 Fees', callback_data: 'nav:fees' },
+    ],
+    [
       { text: '🔄 Refresh', callback_data: 'nav:main' },
     ],
   ],
@@ -92,6 +96,135 @@ function inlineBackButton(menu: string): InlineKeyboardMarkup {
 // ═══════════════════════════════════════════════════════════════
 // MENU RENDERERS
 // ═══════════════════════════════════════════════════════════════
+
+async function showPoints(chatId: number) {
+  try {
+    const { getUserPointsSummary, getTierInfo } = await import('./points');
+    const summary = await getUserPointsSummary(chatId);
+    const tierInfo = getTierInfo(summary.totalPoints);
+
+    const progressToNext = tierInfo.nextTierName === 'MAX'
+      ? 'Max Rank Reached 👑'
+      : `${summary.totalPoints} / ${tierInfo.nextTierPoints} AP to ${tierInfo.nextTierName}`;
+
+    let msg =
+      `🌟 *AlphaPoints Hub*\n\n` +
+      `Rank: ${summary.tierBadge} *${summary.tier}*\n` +
+      `Balance: 💎 *${summary.totalPoints.toLocaleString()} AP*\n` +
+      `🔥 Daily Streak: *${summary.currentStreak} Days* (${summary.currentStreak}/7)\n` +
+      `Progress: \`${progressToNext}\`\n\n` +
+      `📋 *How to Earn AlphaPoints:*\n` +
+      `• 🎁 Daily Check-in: *+50 to +110 AP*\n` +
+      `• ⚡ Copy-Trade Executed: *+100 AP*\n` +
+      `• 🎯 Take Profit Win: *+150 AP*\n` +
+      `• 👥 Friend Joined: *+200 AP*\n` +
+      `• 💎 Friend's 1st Trade: *+300 AP*\n\n`;
+
+    if (summary.recentLedger.length > 0) {
+      msg += `📜 *Recent Activity:*\n`;
+      for (const l of summary.recentLedger.slice(0, 3)) {
+        msg += `• +${l.amount} AP: _${l.description}_\n`;
+      }
+      msg += `\n`;
+    }
+
+    const claimButtonText = summary.canClaimDaily
+      ? '🎁 Claim Daily (+50 AP)'
+      : `⏳ Next Daily in ${summary.nextClaimHours}h`;
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [{ text: claimButtonText, callback_data: 'points:claim' }],
+        [
+          { text: '🏆 Points Leaderboard', callback_data: 'points:leaderboard' },
+          { text: '📜 Points History', callback_data: 'points:history' },
+        ],
+        [{ text: '👥 Invite Friends (+200 AP)', callback_data: 'nav:referrals' }],
+        [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+      ],
+    };
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+      disable_web_page_preview: true,
+    });
+  } catch (e) {
+    await bot.sendMessage(chatId, `❌ Failed to load AlphaPoints: ${(e as Error).message}`, {
+      reply_markup: inlineBackButton('main'),
+    });
+  }
+}
+
+async function showPointsLeaderboard(chatId: number) {
+  try {
+    const { getPointsLeaderboard } = await import('./points');
+    const leaders = await getPointsLeaderboard(10);
+
+    let msg = `🏆 *AlphaPoints Leaderboard*\n\nTop traders ranked by AlphaPoints:\n\n`;
+
+    if (leaders.length === 0) {
+      msg += `_No points recorded yet. Be the first to claim daily points!_`;
+    } else {
+      leaders.forEach((u) => {
+        const medal = u.rank === 1 ? '🥇' : u.rank === 2 ? '🥈' : u.rank === 3 ? '🥉' : `#${u.rank}`;
+        msg += `${medal} ${u.badge} *${u.username}*\n`;
+        msg += `   💎 *${u.totalPoints.toLocaleString()} AP* | ${u.tier} | 🔥 ${u.streak}d streak\n\n`;
+      });
+    }
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [{ text: '🎁 Claim Daily Points', callback_data: 'points:claim' }],
+        [{ text: '🌟 My AlphaPoints Hub', callback_data: 'nav:points' }],
+        [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+      ],
+    };
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  } catch (e) {
+    await bot.sendMessage(chatId, `❌ Failed to load leaderboard: ${(e as Error).message}`, {
+      reply_markup: inlineBackButton('points'),
+    });
+  }
+}
+
+async function showPointsHistory(chatId: number) {
+  try {
+    const { getUserPointsSummary } = await import('./points');
+    const summary = await getUserPointsSummary(chatId);
+
+    let msg = `📜 *AlphaPoints History*\n\nTotal Earned: 💎 *${summary.totalPoints.toLocaleString()} AP*\n\n`;
+
+    if (summary.recentLedger.length === 0) {
+      msg += `_No activity yet. Start copy-trading or claim daily rewards!_`;
+    } else {
+      for (const item of summary.recentLedger) {
+        const dateStr = new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        msg += `• *+${item.amount} AP* — ${item.description || item.action}\n  _${dateStr}_\n\n`;
+      }
+    }
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [{ text: '🌟 Back to AlphaPoints', callback_data: 'nav:points' }],
+        [{ text: '⬅️ Main Menu', callback_data: 'nav:main' }],
+      ],
+    };
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+  } catch (e) {
+    await bot.sendMessage(chatId, `❌ Failed to load history: ${(e as Error).message}`, {
+      reply_markup: inlineBackButton('points'),
+    });
+  }
+}
 
 async function showReferrals(chatId: number) {
   try {
@@ -449,12 +582,20 @@ export async function sendBuySuccessAlert(
   elapsedMs: number
 ) {
   if (!CHAT_ID) return;
+
+  // Award AlphaPoints for copy-trade
+  try {
+    const { awardPoints } = await import('./points');
+    await awardPoints(CHAT_ID, 'COPY_TRADE', 100, `⚡ Copy-traded $${tokenSymbol} ($${amountUsd.toFixed(2)})`);
+  } catch {}
+
   await bot.sendMessage(
     CHAT_ID,
     `✅ *COPY TRADE EXECUTED*\n\n` +
     `Token: *${tokenSymbol}*\n` +
     `Amount: $${amountUsd.toFixed(2)}\n` +
     `Speed: ${elapsedMs}ms\n` +
+    `🌟 *Reward:* +100 AlphaPoints!\n` +
     `Tx: [Solscan](https://solscan.io/tx/${txid})`,
     { parse_mode: 'Markdown', disable_web_page_preview: true }
   );
@@ -482,10 +623,19 @@ export async function sendSellAlert(
   const isWin = pnlPercent > 0 || reason === 'PROFIT';
   const emoji = isWin ? '🎯' : '🔴';
 
+  // Award AlphaPoints for profit win
+  if (isWin) {
+    try {
+      const { awardPoints } = await import('./points');
+      await awardPoints(CHAT_ID, 'PROFIT_WIN', 150, `🎯 Profit win on $${tokenSymbol} (+${pnlPercent.toFixed(1)}%)`);
+    } catch {}
+  }
+
   let msg =
     `${emoji} *POSITION CLOSED*\n\n` +
     `Token: *${tokenSymbol}*\n` +
     `P&L: ${pnlPercent >= 0 ? '🟢' : '🔴'} *${pnlPercent.toFixed(2)}%*\n` +
+    (isWin ? `🌟 *Win Bonus:* +150 AlphaPoints!\n` : '') +
     `Reason: ${reason}\n` +
     `Tx: [Solscan](https://solscan.io/tx/${txid})`;
 
@@ -645,6 +795,13 @@ bot.on('message', async (msg) => {
     case '🛒 Manual Trade':
     case '/trade':
       await showManualTrade(chatId);
+      break;
+    case '🌟 AlphaPoints':
+    case '/points':
+    case '/alphapoints':
+    case '/claim':
+    case '/daily':
+      await showPoints(chatId);
       break;
     case '👥 Referrals':
     case '/referrals':
@@ -940,6 +1097,34 @@ bot.on('callback_query', async (query) => {
   if (data === 'nav:fees') {
     if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
     await showFees(chatId);
+    return;
+  }
+
+  if (data === 'nav:points') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showPoints(chatId);
+    return;
+  }
+
+  if (data === 'points:claim') {
+    const { claimDailyBonus } = await import('./points');
+    const res = await claimDailyBonus(chatId, query.from?.username, query.from?.first_name);
+    await bot.sendMessage(chatId, res.message, {
+      parse_mode: 'Markdown',
+      reply_markup: inlineBackButton('points'),
+    });
+    return;
+  }
+
+  if (data === 'points:leaderboard') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showPointsLeaderboard(chatId);
+    return;
+  }
+
+  if (data === 'points:history') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showPointsHistory(chatId);
     return;
   }
 
@@ -1267,9 +1452,15 @@ bot.onText(/\/start/, async (msg) => {
     try {
       const { getOrCreateReferralUser } = await import('./referral');
       await getOrCreateReferralUser(chatId, msg.from?.username, msg.from?.first_name, referrerId);
+
+      // Initialize points + award referrer +200 AP
+      const { getOrCreateUserPoints, awardPoints } = await import('./points');
+      await getOrCreateUserPoints(chatId, msg.from?.username, msg.from?.first_name);
+      await awardPoints(referrerId, 'REFERRAL_JOIN', 200, `👥 Friend @${msg.from?.username || chatId} joined via your invite link`);
+
       await bot.sendMessage(
         chatId,
-        `🎉 *Welcome to Alpha5000!*\n\nYou joined via invite link.\nStart copy-trading top profitable Solana whales automatically with zero delay!`,
+        `🎉 *Welcome to Alpha5000!*\n\nYou joined via invite link.\n🌟 *Bonus:* +100 AlphaPoints added to your account!\n\nStart copy-trading top profitable Solana whales automatically with zero delay!`,
         { parse_mode: 'Markdown' }
       );
     } catch (e) {
@@ -1279,6 +1470,9 @@ bot.onText(/\/start/, async (msg) => {
     try {
       const { getOrCreateReferralUser } = await import('./referral');
       await getOrCreateReferralUser(chatId, msg.from?.username, msg.from?.first_name);
+
+      const { getOrCreateUserPoints } = await import('./points');
+      await getOrCreateUserPoints(chatId, msg.from?.username, msg.from?.first_name);
     } catch {}
   }
 
