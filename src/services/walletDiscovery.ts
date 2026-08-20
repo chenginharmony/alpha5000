@@ -67,41 +67,42 @@ export async function fetchTopTradersForToken(
   limit: number = 20
 ): Promise<MobulaTopTrader[]> {
   try {
-    // Try Mobula token top-traders endpoint
-    const data = await mobulaFetch('/api/1/token/top-traders', {
+    const data = await mobulaFetch('/api/2/token/trader-positions', {
       address: tokenMint,
-      asset: tokenMint,
       blockchain: 'solana',
-      time_frame: timeFrame,
       limit: String(limit),
     });
 
     const items = data?.data || data?.items || (Array.isArray(data) ? data : []);
     return items.map((t: any) => {
-      const owner = t.address || t.wallet || t.owner || t.user || '';
+      const owner = t.walletAddress || t.address || t.wallet || t.owner || t.user || '';
       const tags: string[] = Array.isArray(t.labels)
-        ? t.labels
+        ? t.labels.map((l: any) => (typeof l === 'string' ? l : l?.name || ''))
         : Array.isArray(t.tags)
         ? t.tags
         : [];
 
+      const volumeBuy = parseFloat(t.volumeBuyUSD || '0') || 0;
+      const volumeSell = parseFloat(t.volumeSellUSD || '0') || 0;
+      const totalPnl = parseFloat(t.totalPnlUSD || t.realizedPnlUSD || '0') || Number(t.totalPnl || 0);
+
       return {
         owner,
-        tags,
-        trade: t.trades_count ?? t.trades ?? t.trade ?? 0,
-        tradeBuy: t.buy_count ?? t.tradeBuy ?? 0,
-        tradeSell: t.sell_count ?? t.tradeSell ?? 0,
-        volumeUsd: t.volume_usd ?? t.volumeUsd ?? t.volume ?? 0,
-        totalPnl: t.total_pnl ?? t.totalPnl ?? t.pnl_usd ?? t.realized_pnl ?? 0,
-        realizedPnl: t.realized_pnl ?? t.realizedPnl ?? 0,
-        unrealizedPnl: t.unrealized_pnl ?? t.unrealizedPnl ?? 0,
-        holdVolumeUsd: t.hold_volume_usd ?? t.holdVolumeUsd ?? 0,
-        netWorth: t.net_worth ?? t.netWorth ?? 0,
-        solBalance: t.sol_balance ?? t.solBalance ?? 0,
-        firstTradeUnixTime: t.first_trade_time ?? t.firstTradeUnixTime ?? 0,
-        lastTradeUnixTime: t.last_trade_time ?? t.lastTradeUnixTime ?? 0,
+        tags: tags.filter(Boolean),
+        trade: (t.buys || 0) + (t.sells || 0) || (t.trades_count ?? t.trades ?? 0),
+        tradeBuy: t.buys ?? t.tradeBuy ?? 0,
+        tradeSell: t.sells ?? t.tradeSell ?? 0,
+        volumeUsd: (volumeBuy + volumeSell) || Number(t.volume_usd || 0),
+        totalPnl,
+        realizedPnl: parseFloat(t.realizedPnlUSD || '0') || totalPnl,
+        unrealizedPnl: parseFloat(t.unrealizedPnlUSD || '0') || 0,
+        holdVolumeUsd: parseFloat(t.tokenAmountUSD || '0') || 0,
+        netWorth: parseFloat(t.tokenAmountUSD || '0') || 0,
+        solBalance: parseFloat(t.nativeBalance || '0') || 0,
+        firstTradeUnixTime: t.firstTradeAt ? new Date(t.firstTradeAt).getTime() / 1000 : 0,
+        lastTradeUnixTime: t.lastTradeAt ? new Date(t.lastTradeAt).getTime() / 1000 : 0,
       };
-    }).filter((t: MobulaTopTrader) => Boolean(t.owner));
+    }).filter((t: MobulaTopTrader) => Boolean(t.owner && t.owner.length >= 32));
   } catch (e) {
     console.error('fetchTopTraders failed:', (e as Error).message);
     return [];
