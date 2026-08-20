@@ -73,11 +73,18 @@ export async function showLeaderboard(chatId: number) {
       const tags = d.walletTags.length > 0 ? ` [${d.walletTags.slice(0, 2).join(', ')}]` : '';
       const pnlEmoji = Number(d.pnl24h || 0) >= 0 ? '🟢' : '🔴';
 
+      let platform = 'Raydium';
+      if (d.tokenMint?.endsWith('pump') || d.tokenSymbol?.toLowerCase().includes('pump')) {
+        platform = 'Pump.fun';
+      } else if (d.tokenMint?.toLowerCase().includes('meteora')) {
+        platform = 'Meteora';
+      }
+
       msg += `${i + 1}. \`${d.address.slice(0, 6)}...${d.address.slice(-6)}\`${tags}\n`;
-      msg += `   P&L 24h: ${pnlEmoji} $${Number(d.pnl24h || 0).toFixed(0)}`;
-      if (d.tokenSymbol) msg += ` | Via ${d.tokenSymbol}`;
+      msg += `   P&L 24h: ${pnlEmoji} *$${Number(d.pnl24h || 0).toLocaleString()}* | 📍 ${platform}`;
+      if (d.tokenSymbol && d.tokenSymbol !== 'UNKNOWN') msg += ` ($${d.tokenSymbol})`;
       msg += `\n`;
-      if (d.netWorthSol) {
+      if (d.netWorthSol && Number(d.netWorthSol) > 0) {
         msg += `   💰 Worth: ${Number(d.netWorthSol).toFixed(2)} SOL\n`;
       }
       msg += `\n`;

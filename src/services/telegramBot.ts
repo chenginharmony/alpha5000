@@ -843,14 +843,25 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
     const pnlEmoji = Number(w.pnl24h || 0) >= 0 ? '🟢' : '🔴';
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
 
+    // Detect DEX platform
+    let platform = 'Raydium / DEX';
+    if (w.tokenMint?.endsWith('pump') || w.tokenSymbol?.toLowerCase().includes('pump')) {
+      platform = 'Pump.fun';
+    } else if (w.tokenMint?.toLowerCase().includes('meteora') || w.tokenSymbol?.toLowerCase().includes('meteora')) {
+      platform = 'Meteora';
+    } else if (w.tokenMint?.toLowerCase().includes('orca')) {
+      platform = 'Orca';
+    }
+
+    const tokenPart = w.tokenSymbol && w.tokenSymbol !== 'UNKNOWN' ? ` | 🪙 *$${w.tokenSymbol}*` : '';
+
     msg += `\n${medal} \`${w.address}\`${tags}\n`;
-    msg += `   💰 24h P&L: ${pnlEmoji} *$${Number(w.pnl24h || 0).toLocaleString()}*`;
-    if (w.tokenSymbol && w.tokenSymbol !== 'UNKNOWN') msg += ` | Via *$${w.tokenSymbol}*`;
-    msg += `\n`;
+    msg += `   💰 24h P&L: ${pnlEmoji} *$${Number(w.pnl24h || 0).toLocaleString()}*\n`;
+    msg += `   📍 DEX: *${platform}*${tokenPart}\n`;
     if (w.volume24h) {
       msg += `   📊 Volume: $${Number(w.volume24h).toLocaleString()} | Trades: ${w.tradeCount24h || 0}\n`;
     }
-    if (w.netWorthSol) {
+    if (w.netWorthSol && Number(w.netWorthSol) > 0) {
       msg += `   💎 Net Worth: ${Number(w.netWorthSol).toFixed(2)} SOL\n`;
     }
   }

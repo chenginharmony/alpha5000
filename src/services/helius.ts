@@ -201,8 +201,33 @@ export async function setupHeliusWebhook(webhookUrl: string): Promise<void> {
     const allAddresses = Array.from(new Set([
       ...personalWallets.map(w => w.address),
       ...groupWallets.map(w => w.address),
-      'MfDuWeqSHEqTFVYZ7LoexgAK9dxk7cy4DFJWjWMGVWa', // Top verified Solana whale fallback
+      'MfDuWeqSHEqTFVYZ7LoexgAK9dxk7cy4DFJWjWMGVWa',
     ]));
+
+    // Check existing webhooks first
+    const listRes = await fetch('https://api.helius.xyz/v0/webhooks?api-key=' + config.HELIUS_API_KEY);
+    if (listRes.ok) {
+      const existingWebhooks = await listRes.json();
+      if (Array.isArray(existingWebhooks) && existingWebhooks.length > 0) {
+        const match = existingWebhooks.find((w: any) => w.webhookURL === webhookUrl) || existingWebhooks[0];
+        console.log('✅ Reusing existing Helius webhook:', match.webhookID);
+
+        await fetch(`https://api.helius.xyz/v0/webhooks/${match.webhookID}?api-key=${config.HELIUS_API_KEY}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            webhookURL: webhookUrl,
+            accountAddresses: allAddresses,
+            transactionTypes: ['ANY'],
+            webhookType: 'enhanced',
+            authHeader: config.WEBHOOK_SECRET,
+          }),
+        });
+
+        console.log(`✅ Synced ${allAddresses.length} wallets to existing Helius webhook`);
+        return;
+      }
+    }
 
     const res = await fetch('https://api.helius.xyz/v0/webhooks?api-key=' + config.HELIUS_API_KEY, {
       method: 'POST',
