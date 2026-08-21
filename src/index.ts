@@ -66,6 +66,15 @@ async function main() {
     console.log('⚠️ Set WEBHOOK_URL env var to auto-configure Helius webhook');
     console.log('   Or configure manually at https://dev.helius.xyz/webhooks');
   }
+
+  // 24/7 Keep-Alive ping to prevent Render Free Tier from sleeping
+  const publicUrl = webhookUrl ? webhookUrl.replace('/webhook/helius', '') : 'https://alpha5000-bot.onrender.com';
+  console.log(`⏱️ Keep-alive engine active: self-pinging ${publicUrl}/health every 5 minutes`);
+  setInterval(async () => {
+    try {
+      await fetch(`${publicUrl}/health`);
+    } catch {}
+  }, 5 * 60 * 1000);
 }
 
 main().catch((e) => {
