@@ -31,6 +31,12 @@ const configSchema = z.object({
   PLATFORM_FEE_BPS: z.string().default('20').transform(Number), // 20 = 0.2%
   FEE_WALLET_ADDRESS: z.string().optional().transform(val => val || undefined), // Where fees go (defaults to bot wallet)
   JUPITER_API_KEY: z.string().optional().transform(val => val || undefined), // Jupiter API / Referral key
+
+  // === COINBASE DEVELOPER PLATFORM (CDP) & ONRAMP ===
+  COINBASE_PROJECT_ID: z.string().default('ba7c7fb8-d55e-4963-8905-62c43aef2697'),
+  COINBASE_CLIENT_KEY: z.string().default('HccIsDaTxiyObExalDqPHVbvHBe7BNCA'),
+  COINBASE_API_KEY_ID: z.string().default('07ca80c2-bad0-4688-a3ab-478b1cf5b319'),
+  COINBASE_API_SECRET: z.string().default('ehyhkVx56u+syWx/JlVkL5KGXrUckR00lPKMrO71rMJSVgoYsAcu2XTuhQcgn+clvIOrpNqaaF0tfOqtv+wD9A=='),
 });
 
 const parsed = configSchema.safeParse(process.env);

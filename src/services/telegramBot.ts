@@ -121,7 +121,9 @@ function inlineBackButton(menu: string): InlineKeyboardMarkup {
 async function showWallet(chatId: number) {
   try {
     const { getUserWalletInfo } = await import('./userWallet');
+    const { getCoinbaseOnrampUrl } = await import('./coinbase');
     const info = await getUserWalletInfo(chatId);
+    const onrampUrl = getCoinbaseOnrampUrl({ walletAddress: info.publicKey });
 
     const msg =
       `👛 *My Solana Trading Wallet*\n\n` +
@@ -131,20 +133,23 @@ async function showWallet(chatId: number) {
       `💰 *Live Balance:*\n` +
       `• *${info.balanceSol.toFixed(4)} SOL* (~$${info.balanceUsd.toFixed(2)} USD)\n` +
       `• SOL Price: ~$${info.solPriceUsd.toFixed(2)}\n\n` +
-      `💡 _Deposit SOL to this address to copy-trade automatically or trade manually._\n` +
+      `💡 _Deposit SOL to copy-trade automatically or buy SOL instantly with Apple Pay / Card below._\n` +
       `_You can withdraw your funds or export your private key at any time._`;
 
     const keyboard: InlineKeyboardMarkup = {
       inline_keyboard: [
         [
           { text: '📥 Deposit SOL', callback_data: 'wallet:deposit' },
-          { text: '📤 Withdraw SOL', callback_data: 'wallet:withdraw' },
+          { text: '💳 Buy SOL (Coinbase)', url: onrampUrl },
         ],
         [
+          { text: '📤 Withdraw SOL', callback_data: 'wallet:withdraw' },
           { text: '🔑 Export Private Key', callback_data: 'wallet:export' },
-          { text: '🔄 Refresh Balance', callback_data: 'nav:user_wallet' },
         ],
-        [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+        [
+          { text: '🔄 Refresh Balance', callback_data: 'nav:user_wallet' },
+          { text: '⬅️ Back to Menu', callback_data: 'nav:main' },
+        ],
       ],
     };
 
@@ -1044,15 +1049,27 @@ bot.on('message', async (msg) => {
       break;
     case '/deposit': {
       const { getUserWalletInfo } = await import('./userWallet');
+      const { getCoinbaseOnrampUrl } = await import('./coinbase');
       const info = await getUserWalletInfo(chatId);
+      const onrampUrl = getCoinbaseOnrampUrl({ walletAddress: info.publicKey });
       await bot.sendMessage(
         chatId,
         `📥 *Deposit SOL to Alpha5000*\n\n` +
-        `Send SOL to your dedicated trading wallet:\n\n` +
-        `📍 *Address (Tap to copy):*\n` +
+        `1️⃣ *Direct Crypto Transfer:*\n` +
+        `Send SOL directly to your dedicated bot address:\n` +
         `\`${info.publicKey}\`\n\n` +
-        `⚡ _Deposits credit instantly on Solana!_`,
-        { parse_mode: 'Markdown', reply_markup: inlineBackButton('user_wallet') }
+        `2️⃣ *💳 Buy SOL with Card / Apple Pay:*\n` +
+        `Purchase SOL instantly via Coinbase Onramp directly into this wallet.`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '💳 Buy SOL (Coinbase Onramp)', url: onrampUrl }],
+              [{ text: '🔄 Refresh Balance', callback_data: 'nav:user_wallet' }],
+              [{ text: '⬅️ Back to Wallet', callback_data: 'nav:user_wallet' }],
+            ],
+          },
+        }
       );
       break;
     }
@@ -1705,6 +1722,36 @@ bot.on('callback_query', async (query) => {
       `You will receive instant copy alerts whenever any of these whales buy on Solana.\n` +
       `🌟 *+150 AlphaPoints* awarded to your account!`,
       { parse_mode: 'Markdown', reply_markup: inlineBackButton('main') }
+    );
+    return;
+  }
+
+  // Wallet deposit options
+  if (data === 'wallet:deposit') {
+    const { getUserWalletInfo } = await import('./userWallet');
+    const { getCoinbaseOnrampUrl } = await import('./coinbase');
+    const info = await getUserWalletInfo(chatId);
+    const onrampUrl = getCoinbaseOnrampUrl({ walletAddress: info.publicKey });
+
+    await bot.sendMessage(
+      chatId,
+      `📥 *Deposit SOL to Alpha5000*\n\n` +
+      `Choose how you would like to deposit funds:\n\n` +
+      `1️⃣ *Direct Crypto Transfer (SOL):*\n` +
+      `Send native SOL to your dedicated wallet address:\n` +
+      `\`${info.publicKey}\`\n\n` +
+      `2️⃣ *💳 Buy SOL with Card / Apple Pay (Coinbase Onramp):*\n` +
+      `Instant fiat deposit via Coinbase with Credit/Debit card or Coinbase account.`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💳 Buy SOL with Card / Apple Pay (Coinbase)', url: onrampUrl }],
+            [{ text: '🔄 Refresh Balance', callback_data: 'nav:user_wallet' }],
+            [{ text: '⬅️ Back to Wallet', callback_data: 'nav:user_wallet' }],
+          ],
+        },
+      }
     );
     return;
   }
