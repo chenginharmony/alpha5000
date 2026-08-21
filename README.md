@@ -357,14 +357,16 @@ The bot includes an automated viral referral system allowing users to invite fel
   - **Auto-Alert Broadcast Stream**: Scans new launches every 7 minutes and broadcasts `🚨 NEW BUNDLE DETECTED` alerts to all registered users and groups when Risk Score $\ge 60$.
   - **Custom Alert Subscriptions (`/bundlesub [min_risk]` & `/bundleunsub`)**: Allows traders to set custom sensitivity thresholds.
 
-- **Live Whale Discovery & Constant Alerts**:
-  - **Accelerated Discovery**: Scheduled every **10 minutes** (plus immediate run on boot).
-  - **1-Tap Direct Track Buttons**: Every alert includes `[➕ Track #1]`, `[➕ Track #2]`, `[➕ Track #3]`, and `[⚡ Track All Top 3 Whales (+150 AP)]`.
-  - **Accurate On-Chain Net Worth & Portfolios**: Integrated Helius DAS API (`getAssetsByOwner`) + Solana RPC to fetch true live SPL token holdings, native SOL balances, and total USD portfolio valuation (e.g. `💎 Net Worth: 94.44 SOL (~$18,328 USD)`).
-  - **DEX Platform Identification**: Clearly tags the platform where the smart money trades (e.g. `📍 DEX: Pump.fun`, `Raydium`, `Meteora`) alongside the traded token (`🪙 Token: $Albie`).
-  - **Real Token Metadata**: Fixed `UNKNOWN` symbols by batch resolving real token symbols and names (e.g. `$BONK`, `$Albie`, `$TPUSA`) directly via DexScreener & Jupiter.
-  - **Multi-Chat Broadcast**: Discovered smart money whale alerts broadcast to all registered bot users, groups, and admins.
-  - **Helius Webhook Reuse**: Automatically reuses and updates existing Helius webhooks to respect API limits.
+- **🤖 Coinbase Developer Platform (CDP) Agentic AI Engine**:
+  - **CDP Credentials Integration**: Connected Project ID `ba7c7fb8-d55e-4963-8905-62c43aef2697`, Client Key `HccIsDaTxiyObExalDqPHVbvHBe7BNCA`, and API Key ID `07ca80c2-bad0-4688-a3ab-478b1cf5b319`.
+  - **Autonomous Agentic Capabilities**:
+    - Autonomous Multi-Agent Swarm execution (Sentinel, Oracle, Quant, Sniper).
+    - Autonomous trade recommendations and safety veto evaluation.
+    - Agentic on-chain wallet balance management.
+  - **1-Tap Coinbase Agentic Onramp**:
+    - Directly embeds the user's specific embedded Solana wallet address into Coinbase Onramp checkout (`https://pay.coinbase.com/buy/...`).
+    - Enables users to buy SOL with Credit Card, Debit Card, Apple Pay, or Coinbase Account in 1 tap to fund their autonomous copy-trading bot.
+  - **Telegram Agent Dashboard (`/agent`, `/agentic`, `/cdp`)**: Interactive dashboard displaying live CDP connection status, swarm health, and instant onramp funding.
 - **Whale dumps**: You're copying buys, not sells. Whale may dump on you.
 
 ---

@@ -944,7 +944,9 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
     }
   }
 
-  msg += `\n💡 _Tap buttons below to track these wallets & receive live copy-trade alerts:_`;
+  msg += `\n🤖 *AGENTIC INTELLIGENCE:*\n`;
+  msg += `💡 _Tap *[🤖 AI Swarm Council]* to let our 5 autonomous agents audit tokens traded by these whales before copying._\n\n`;
+  msg += `💡 _Tap buttons below to track these wallets & receive live copy-trade alerts:_`;
 
   const trackRow: any[] = [];
   topWallets.slice(0, 3).forEach((w, i) => {
@@ -959,10 +961,13 @@ export async function sendDiscoveryNotification(count: number, wallets?: any[]):
       trackRow,
       [{ text: '⚡ Track All Top 3 Whales (+150 AP)', callback_data: 'disc:track_all' }],
       [
-        { text: '🏆 Wallet Leaderboard', callback_data: 'nav:leaderboard' },
-        { text: '🔍 Discover More', callback_data: 'discovery:run' },
+        { text: '🤖 AI Swarm Council', callback_data: 'swarm:search' },
+        { text: '🚨 Bundle Detector', callback_data: 'nav:bundles' },
       ],
-      [{ text: '👛 My Wallet', callback_data: 'nav:user_wallet' }],
+      [
+        { text: '🏆 Wallet Leaderboard', callback_data: 'nav:leaderboard' },
+        { text: '👛 My Wallet', callback_data: 'nav:user_wallet' },
+      ],
     ],
   };
 

@@ -508,5 +508,15 @@ export function startBundleScannerJobs(): void {
     }
   });
 
-  console.log('✅ Bundle detection scanner started (every 7min)');
+  // Broadcast Auto-Ranked Bundle Radar Alert every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const { broadcastBundleRadarAlert } = await import('./telegramBotBundle');
+      await broadcastBundleRadarAlert();
+    } catch (e) {
+      console.error('Scheduled bundle radar alert failed:', (e as Error).message);
+    }
+  });
+
+  console.log('✅ Bundle detection scanner started (scan: every 7min, radar alert: every 15min)');
 }
