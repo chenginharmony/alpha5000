@@ -276,6 +276,71 @@ export async function fetchDexScreenerTrending(): Promise<MobulaTrendingToken[]>
   }
 }
 
+/**
+ * Fetch live on-chain portfolio value and native SOL balance via Helius DAS / Solana RPC
+ */
+export async function fetchWalletOnchainNetWorth(address: string): Promise<{ netWorthSol: number; netWorthUsd: number; tokenCount: number }> {
+  try {
+    const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${config.HELIUS_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'helius-portfolio',
+        method: 'getAssetsByOwner',
+        params: {
+          ownerAddress: address,
+          page: 1,
+          limit: 100,
+          displayOptions: { showFungible: true, showNativeBalance: true },
+        },
+      }),
+    });
+
+    const data = await res.json();
+    const result = data.result;
+    const nativeSol = result?.nativeBalance?.lamports ? (result.nativeBalance.lamports / 1e9) : 0;
+    const items = result?.items || [];
+
+    const solPrice = 185;
+    let totalUsd = nativeSol * solPrice;
+    let tokenCount = 0;
+
+    for (const item of items) {
+      if (item.interface === 'FungibleToken' || item.interface === 'FungibleAsset') {
+        tokenCount++;
+        const pricePerToken = item.token_info?.price_info?.price_per_token || 0;
+        const balance = item.token_info?.balance || 0;
+        const decimals = item.token_info?.decimals || 0;
+        const amount = balance / Math.pow(10, decimals);
+        const usdValue = item.token_info?.price_info?.total_price || (amount * pricePerToken);
+        if (usdValue > 0) {
+          totalUsd += usdValue;
+        }
+      }
+    }
+
+    const totalSol = totalUsd / solPrice;
+    return {
+      netWorthSol: totalSol,
+      netWorthUsd: totalUsd,
+      tokenCount,
+    };
+  } catch (e) {
+    try {
+      const lamports = await connection.getBalance(new PublicKey(address));
+      const sol = lamports / LAMPORTS_PER_SOL;
+      return {
+        netWorthSol: sol,
+        netWorthUsd: sol * 185,
+        tokenCount: 0,
+      };
+    } catch {
+      return { netWorthSol: 0, netWorthUsd: 0, tokenCount: 0 };
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 4. WALLET SCORING ALGORITHM
 // ═══════════════════════════════════════════════════════════════
@@ -381,14 +446,9 @@ export async function discoverWalletsFromTrending(): Promise<number> {
       });
       if (existing) continue;
 
-      // Fetch live on-chain SOL balance for accurate net worth
-      let onChainSol = 0;
-      try {
-        const lamports = await connection.getBalance(new PublicKey(trader.owner));
-        onChainSol = lamports / LAMPORTS_PER_SOL;
-      } catch {}
-
-      const netWorthSol = onChainSol > 0 ? onChainSol : (trader.solBalance || trader.netWorth || 0);
+      // Fetch live on-chain portfolio & SOL balance for accurate net worth
+      const onChainData = await fetchWalletOnchainNetWorth(trader.owner);
+      const netWorthSol = onChainData.netWorthSol > 0 ? onChainData.netWorthSol : (trader.solBalance || trader.netWorth || 0);
 
       // Skip if already discovered
       const existingDisc = await prisma.discoveredWallet.findFirst({
