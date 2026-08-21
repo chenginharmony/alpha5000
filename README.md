@@ -344,26 +344,27 @@ The bot includes an automated viral referral system allowing users to invite fel
 - **Blacklist**: Add known scam mints to `BLACKLIST_MINTS` in `tokenValidator.ts`
 - **Jupiter route check**: Verifies token is tradable before buying
 - **Deduplication**: Prevents double-buying same signature
-- **Min whale buy filter**: Ignores small whale transactions
+- **🚨 Bundle Detection & Launch Sniper Analysis System**:
+  - **Live Feed Dashboard (`/bundles`)**: Renders top 5 latest detected bundled launches with risk badges (🟥 EXTREME, 🟧 HIGH, 🟨 MEDIUM), bundle size (wallets, SOL, USD), % supply grabbed, common funder status, and interactive buttons (`[🔍 Check Token Bundle]`, `[🔄 Refresh]`, `[🔔 Alert Settings]`).
+  - **Deep Token Bundle Search (`/checkbundle <address_or_symbol>`)**: Performs live on-chain bundle analysis on any Solana contract, extracting early buyer cluster slots, Jito atomic execution, same-funder addresses, burner wallet ratios, and dev overlap.
+  - **6-Factor Weighted Risk Scoring Engine (`BundleRiskScorer`)**:
+    1. **Supply Concentration (25%)**: Flags $>30-50\%$ supply grabbed by bundle.
+    2. **Wallet Freshness (20%)**: Flags burner accounts created $<24$h before launch.
+    3. **Funding Pattern (20%)**: Traces multi-wallet funding back to single dev/master funder.
+    4. **Capital Commitment (15%)**: Evaluates total SOL volume committed at launch.
+    5. **Dev Overlap (12%)**: Detects dev wallet participation or funding in bundle.
+    6. **Timing Precision (8%)**: Identifies same-slot atomic Jito MEV execution.
+  - **Auto-Alert Broadcast Stream**: Scans new launches every 7 minutes and broadcasts `🚨 NEW BUNDLE DETECTED` alerts to all registered users and groups when Risk Score $\ge 60$.
+  - **Custom Alert Subscriptions (`/bundlesub [min_risk]` & `/bundleunsub`)**: Allows traders to set custom sensitivity thresholds.
 
----
-
-## 🔥 Speed Tips
-
-1. **Host near US-East** (Helius infrastructure is there)
-2. **Use dedicated RPC** (Helius paid tier for priority)
-3. **Increase priority fee** in `jupiter.ts` if competing with MEV
-4. **Pre-approve tokens** (not needed with Jupiter v6, but saves tx size)
-5. **Monitor RPC latency**: `ping helius-rpc.com`
-
----
-
-## ⚠️ Risks
-
-- **Honeypots**: Bot buys tradable tokens, but some are sell-locked. Add RugCheck deep validation if needed (uncomment in `helius.ts`).
-- **Slippage**: High-volatility tokens may execute far from quote. Default 2% slippage.
-- **MEV sandwich**: Your small order may get sandwiched. Use higher priority fees in bull markets.
-- **skipPreflight**: Enabled for speed. Bad transactions burn fees without executing.
+- **Live Whale Discovery & Constant Alerts**:
+  - **Accelerated Discovery**: Scheduled every **10 minutes** (plus immediate run on boot).
+  - **1-Tap Direct Track Buttons**: Every alert includes `[➕ Track #1]`, `[➕ Track #2]`, `[➕ Track #3]`, and `[⚡ Track All Top 3 Whales (+150 AP)]`.
+  - **Accurate On-Chain Net Worth & Portfolios**: Integrated Helius DAS API (`getAssetsByOwner`) + Solana RPC to fetch true live SPL token holdings, native SOL balances, and total USD portfolio valuation (e.g. `💎 Net Worth: 94.44 SOL (~$18,328 USD)`).
+  - **DEX Platform Identification**: Clearly tags the platform where the smart money trades (e.g. `📍 DEX: Pump.fun`, `Raydium`, `Meteora`) alongside the traded token (`🪙 Token: $Albie`).
+  - **Real Token Metadata**: Fixed `UNKNOWN` symbols by batch resolving real token symbols and names (e.g. `$BONK`, `$Albie`, `$TPUSA`) directly via DexScreener & Jupiter.
+  - **Multi-Chat Broadcast**: Discovered smart money whale alerts broadcast to all registered bot users, groups, and admins.
+  - **Helius Webhook Reuse**: Automatically reuses and updates existing Helius webhooks to respect API limits.
 - **Whale dumps**: You're copying buys, not sells. Whale may dump on you.
 
 ---
