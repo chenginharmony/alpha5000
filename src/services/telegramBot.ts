@@ -4,10 +4,18 @@ import { prisma } from '../db';
 import { executeBuy, executeSell, MY_WALLET_PUBKEY } from './jupiter';
 import { quickValidateToken } from './tokenValidator';
 import { showLeaderboard, handleDiscoveryCallback } from './telegramBotLeaderboard';
+import {
+  showBundlesDashboard,
+  showBundleDetails,
+  showBundleSettings,
+  setBundleBotInstance,
+} from './telegramBotBundle';
 import fetch from 'cross-fetch';
 
 const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
 let CHAT_ID = config.TELEGRAM_CHAT_ID && config.TELEGRAM_CHAT_ID !== 'your_chat_id' ? config.TELEGRAM_CHAT_ID : undefined;
+
+setBundleBotInstance(bot);
 
 // ═══════════════════════════════════════════════════════════════
 // STATE MANAGEMENT (in-memory, single instance)
@@ -27,7 +35,8 @@ type UserStep =
   | 'await_sell_select'
   | 'await_payout_wallet'
   | 'await_withdraw_address'
-  | 'await_withdraw_amount';
+  | 'await_withdraw_amount'
+  | 'await_check_bundle_input';
 
 interface UserState {
   step: UserStep;
@@ -55,8 +64,8 @@ function clearState(chatId: number) {
 const MAIN_MENU: ReplyKeyboardMarkup = {
   keyboard: [
     [{ text: '👛 My Wallet' }, { text: '📊 Portfolio' }, { text: '⚙️ Settings' }],
-    [{ text: '🐋 Wallets' }, { text: '🏆 Leaderboard' }, { text: '🛒 Manual Trade' }],
-    [{ text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }, { text: '💰 Fees' }],
+    [{ text: '🐋 Wallets' }, { text: '🏆 Leaderboard' }, { text: '🚨 Bundles' }],
+    [{ text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }, { text: '🛒 Manual Trade' }],
     [{ text: '🔄 Refresh' }],
   ],
   resize_keyboard: true,
@@ -73,12 +82,12 @@ const MAIN_INLINE_KEYBOARD: InlineKeyboardMarkup = {
     [
       { text: '🐋 Wallets', callback_data: 'nav:wallets' },
       { text: '🏆 Leaderboard', callback_data: 'nav:leaderboard' },
-      { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
+      { text: '🚨 Bundle Detector', callback_data: 'nav:bundles' },
     ],
     [
       { text: '🌟 AlphaPoints', callback_data: 'nav:points' },
       { text: '👥 Referrals', callback_data: 'nav:referrals' },
-      { text: '💰 Fees', callback_data: 'nav:fees' },
+      { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
     ],
     [
       { text: '🌐 Terminal', url: 'https://anyalpha.fun' },
@@ -933,6 +942,37 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // Check bundle commands with arguments
+  if (text.startsWith('/checkbundle')) {
+    const target = text.replace(/\/checkbundle\s*/, '').trim();
+    if (target) {
+      await showBundleDetails(chatId, target);
+      return;
+    }
+    setState(chatId, 'await_check_bundle_input');
+    await bot.sendMessage(chatId, '🔍 *Check Token Bundle*\n\nSend the Solana token contract address or symbol to analyze:', {
+      parse_mode: 'Markdown',
+      reply_markup: BACK_MENU,
+    });
+    return;
+  }
+
+  if (text.startsWith('/bundlesub')) {
+    const arg = text.replace(/\/bundlesub\s*/, '').trim();
+    const min = parseInt(arg) || 60;
+    await prisma.bundleAlertSubscription.upsert({
+      where: { userChatId: String(chatId) },
+      update: { minRiskScore: min, isActive: true },
+      create: { userChatId: String(chatId), minRiskScore: min, isActive: true },
+    });
+    await bot.sendMessage(
+      chatId,
+      `🔔 *Subscribed to Bundle Alerts!*\n\nYou will receive alerts for launches with Risk Score $\\ge$ ${min}/100.`,
+      { parse_mode: 'Markdown', reply_markup: inlineBackButton('bundles') }
+    );
+    return;
+  }
+
   // Main menu navigation
   switch (text) {
     case '📊 Portfolio':
@@ -950,6 +990,21 @@ bot.on('message', async (msg) => {
     case '🏆 Leaderboard':
     case '/leaderboard':
       await showLeaderboard(chatId);
+      break;
+    case '🚨 Bundles':
+    case '/bundles':
+    case '/bundle':
+      await showBundlesDashboard(chatId);
+      break;
+    case '/bundleunsub':
+      await prisma.bundleAlertSubscription.upsert({
+        where: { userChatId: String(chatId) },
+        update: { isActive: false },
+        create: { userChatId: String(chatId), isActive: false },
+      });
+      await bot.sendMessage(chatId, '🔕 *Bundle alerts muted.*', {
+        reply_markup: inlineBackButton('bundles'),
+      });
       break;
     case '📈 Stats':
     case '/stats':
@@ -1044,6 +1099,12 @@ async function handleStatefulInput(chatId: number, text: string, state: UserStat
   }
 
   switch (state.step) {
+    case 'await_check_bundle_input': {
+      const target = text.trim();
+      clearState(chatId);
+      await showBundleDetails(chatId, target);
+      break;
+    }
     case 'await_wallet_add': {
       const address = text.trim();
       if (address.length < 32) {
@@ -1413,6 +1474,55 @@ bot.on('callback_query', async (query) => {
   if (data === 'nav:manual') {
     if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
     await showManualTrade(chatId);
+    return;
+  }
+
+  if (data === 'nav:bundles') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showBundlesDashboard(chatId);
+    return;
+  }
+
+  if (data === 'bundle:search') {
+    setState(chatId, 'await_check_bundle_input');
+    await bot.sendMessage(chatId, '🔍 *Search Token Bundle*\n\nSend the Solana token contract address or symbol to analyze:', {
+      parse_mode: 'Markdown',
+      reply_markup: BACK_MENU,
+    });
+    return;
+  }
+
+  if (data.startsWith('bundle:view:')) {
+    const tokenMint = data.replace('bundle:view:', '').trim();
+    await showBundleDetails(chatId, tokenMint);
+    return;
+  }
+
+  if (data === 'bundle:settings') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showBundleSettings(chatId);
+    return;
+  }
+
+  if (data.startsWith('bundle:set_thresh:')) {
+    const score = parseInt(data.split(':')[2]) || 60;
+    await prisma.bundleAlertSubscription.upsert({
+      where: { userChatId: String(chatId) },
+      update: { minRiskScore: score, isActive: true },
+      create: { userChatId: String(chatId), minRiskScore: score, isActive: true },
+    });
+    await showBundleSettings(chatId);
+    return;
+  }
+
+  if (data.startsWith('bundle:toggle_sub:')) {
+    const on = data.split(':')[2] === 'on';
+    await prisma.bundleAlertSubscription.upsert({
+      where: { userChatId: String(chatId) },
+      update: { isActive: on },
+      create: { userChatId: String(chatId), isActive: on },
+    });
+    await showBundleSettings(chatId);
     return;
   }
 

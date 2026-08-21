@@ -303,5 +303,73 @@ model UserWallet {
   @@index([publicKey])
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BUNDLE DETECTION & SNIPER LAUNCH ANALYSIS SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+model BundleDetection {
+  id               String         @id @default(cuid())
+  tokenMint        String         @unique
+  tokenSymbol      String?
+  tokenName        String?
+  launchSlot       String?
+  bundleType       String         @default("COORDINATED") // JITO, SAME_FUNDER, COORDINATED
+  walletCount      Int            @default(0)
+  totalSolSpent    Decimal        @default(0) @db.Decimal(18, 6)
+  totalUsdSpent    Decimal?       @db.Decimal(18, 2)
+  pctSupplyBought  Decimal        @default(0) @db.Decimal(5, 2)
+  commonFunder     String?
+  devWallet        String?
+  devInBundle      Boolean        @default(false)
+  riskScore        Int            @default(0) // 0 to 100
+  riskLevel        String         @default("LOW") // EXTREME, HIGH, MEDIUM, LOW
+  riskSummary      String?
+  rawData          Json?
+  
+  wallets          BundleWallet[]
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([tokenMint])
+  @@index([riskScore])
+  @@index([createdAt])
+}
+
+model BundleWallet {
+  id               String          @id @default(cuid())
+  bundleId         String
+  bundle           BundleDetection @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  
+  walletAddress    String
+  solSpent         Decimal         @default(0) @db.Decimal(18, 6)
+  tokensReceived   Decimal?        @db.Decimal(36, 0)
+  pctSupply        Decimal?        @db.Decimal(5, 2)
+  fundingSource    String?
+  walletAgeHours   Decimal?        @db.Decimal(10, 2)
+  isBurner         Boolean         @default(false)
+  txHash           String?
+  slot             String?
+
+  createdAt        DateTime        @default(now())
+
+  @@index([bundleId])
+  @@index([walletAddress])
+  @@index([fundingSource])
+}
+
+model BundleAlertSubscription {
+  id               String          @id @default(cuid())
+  userChatId       String          @unique
+  minRiskScore     Int             @default(60)
+  isActive         Boolean         @default(true)
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([userChatId])
+}
+
+
 
 

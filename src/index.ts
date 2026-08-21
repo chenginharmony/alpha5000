@@ -4,6 +4,7 @@ import { initDb, prisma } from './db';
 import { handleHeliusWebhook, setupHeliusWebhook } from './services/helius';
 import { startProfitMonitor } from './services/profitMonitor';
 import { startDiscoveryJobs } from './services/walletDiscovery';
+import { startBundleScannerJobs } from './services/bundleDetection';
 import './services/telegramBot'; // Initializes bot polling + UI
 import { initGroupBot } from './services/groupBot';
 
@@ -57,6 +58,9 @@ async function main() {
 
   // Start wallet discovery jobs
   startDiscoveryJobs();
+
+  // Start bundle detection scanner jobs
+  startBundleScannerJobs();
 
   // Setup Helius webhook
   const webhookUrl = process.env.WEBHOOK_URL;
