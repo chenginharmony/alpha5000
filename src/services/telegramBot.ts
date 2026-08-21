@@ -10,12 +10,18 @@ import {
   showBundleSettings,
   setBundleBotInstance,
 } from './telegramBotBundle';
+import {
+  showSwarmDashboard,
+  showSwarmAnalysis,
+  setSwarmBotInstance,
+} from './telegramBotSwarm';
 import fetch from 'cross-fetch';
 
 const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
 let CHAT_ID = config.TELEGRAM_CHAT_ID && config.TELEGRAM_CHAT_ID !== 'your_chat_id' ? config.TELEGRAM_CHAT_ID : undefined;
 
 setBundleBotInstance(bot);
+setSwarmBotInstance(bot);
 
 // ═══════════════════════════════════════════════════════════════
 // STATE MANAGEMENT (in-memory, single instance)
@@ -36,7 +42,8 @@ type UserStep =
   | 'await_payout_wallet'
   | 'await_withdraw_address'
   | 'await_withdraw_amount'
-  | 'await_check_bundle_input';
+  | 'await_check_bundle_input'
+  | 'await_swarm_input';
 
 interface UserState {
   step: UserStep;
@@ -65,8 +72,8 @@ const MAIN_MENU: ReplyKeyboardMarkup = {
   keyboard: [
     [{ text: '👛 My Wallet' }, { text: '📊 Portfolio' }, { text: '⚙️ Settings' }],
     [{ text: '🐋 Wallets' }, { text: '🏆 Leaderboard' }, { text: '🚨 Bundles' }],
-    [{ text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }, { text: '🛒 Manual Trade' }],
-    [{ text: '🔄 Refresh' }],
+    [{ text: '🤖 AI Swarm' }, { text: '🌟 AlphaPoints' }, { text: '👥 Referrals' }],
+    [{ text: '🛒 Manual Trade' }, { text: '🔄 Refresh' }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -85,15 +92,16 @@ const MAIN_INLINE_KEYBOARD: InlineKeyboardMarkup = {
       { text: '🚨 Bundle Detector', callback_data: 'nav:bundles' },
     ],
     [
+      { text: '🤖 AI Swarm Council', callback_data: 'nav:swarm' },
       { text: '🌟 AlphaPoints', callback_data: 'nav:points' },
       { text: '👥 Referrals', callback_data: 'nav:referrals' },
-      { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
     ],
     [
+      { text: '🛒 Manual Trade', callback_data: 'nav:manual' },
       { text: '🌐 Terminal', url: 'https://anyalpha.fun' },
       { text: '🐦 Twitter / X', url: 'https://x.com/getanyalpha' },
-      { text: '🔄 Refresh', callback_data: 'nav:main' },
     ],
+    [{ text: '🔄 Refresh', callback_data: 'nav:main' }],
   ],
 };
 
@@ -973,6 +981,17 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // AI Swarm Council command with arguments
+  if (text.startsWith('/swarm')) {
+    const target = text.replace(/\/swarm(\s+analyze)?\s*/i, '').trim();
+    if (target) {
+      await showSwarmAnalysis(chatId, target);
+      return;
+    }
+    await showSwarmDashboard(chatId);
+    return;
+  }
+
   // Main menu navigation
   switch (text) {
     case '📊 Portfolio':
@@ -995,6 +1014,10 @@ bot.on('message', async (msg) => {
     case '/bundles':
     case '/bundle':
       await showBundlesDashboard(chatId);
+      break;
+    case '🤖 AI Swarm':
+    case '/swarm':
+      await showSwarmDashboard(chatId);
       break;
     case '/bundleunsub':
       await prisma.bundleAlertSubscription.upsert({
@@ -1099,6 +1122,12 @@ async function handleStatefulInput(chatId: number, text: string, state: UserStat
   }
 
   switch (state.step) {
+    case 'await_swarm_input': {
+      const target = text.trim();
+      clearState(chatId);
+      await showSwarmAnalysis(chatId, target);
+      break;
+    }
     case 'await_check_bundle_input': {
       const target = text.trim();
       clearState(chatId);
@@ -1523,6 +1552,28 @@ bot.on('callback_query', async (query) => {
       create: { userChatId: String(chatId), isActive: on },
     });
     await showBundleSettings(chatId);
+    return;
+  }
+
+  // AI Swarm Council Callbacks
+  if (data === 'nav:swarm') {
+    if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
+    await showSwarmDashboard(chatId);
+    return;
+  }
+
+  if (data === 'swarm:search') {
+    setState(chatId, 'await_swarm_input');
+    await bot.sendMessage(chatId, '🤖 *AI Swarm Council Analysis*\n\nSend the Solana token contract address or symbol to convene the council:', {
+      parse_mode: 'Markdown',
+      reply_markup: BACK_MENU,
+    });
+    return;
+  }
+
+  if (data.startsWith('swarm:analyze:')) {
+    const tokenMint = data.replace('swarm:analyze:', '').trim();
+    await showSwarmAnalysis(chatId, tokenMint);
     return;
   }
 
