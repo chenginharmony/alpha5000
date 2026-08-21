@@ -383,6 +383,59 @@ async function showFees(chatId: number) {
   }
 }
 
+async function showAgenticDashboard(chatId: number) {
+  try {
+    const { getCdpAgentStatus, generateAgentOnrampLink } = await import('./coinbaseAgent');
+    const { getUserWalletInfo } = await import('./userWallet');
+    const cdpStatus = getCdpAgentStatus();
+    const userWallet = await getUserWalletInfo(chatId);
+    const onrampUrl = generateAgentOnrampLink(userWallet.publicKey, 50);
+
+    let msg = `🤖 *Alpha5000 Agentic AI Swarm & CDP Engine*\n\n`;
+    msg += `Autonomous multi-agent intelligence powered by Coinbase Developer Platform (CDP) & Solana:\n\n`;
+
+    msg += `🌐 *Coinbase CDP Agent Status:* 🟢 **CONNECTED**\n`;
+    msg += `• Project ID: \`${cdpStatus.projectId.slice(0, 8)}...${cdpStatus.projectId.slice(-4)}\`\n`;
+    msg += `• API Key ID: \`${cdpStatus.apiKeyId.slice(0, 8)}...${cdpStatus.apiKeyId.slice(-4)}\`\n`;
+    msg += `• Agent Network: \`${cdpStatus.network}\`\n\n`;
+
+    msg += `🧠 *Autonomous Swarm Agents:*\n`;
+    msg += `• 🛡️ *Sentinel Agent:* Autonomous Rug, Honeypot & LP Lock Scanner\n`;
+    msg += `• 🔮 *Oracle Agent:* Social Velocity & Sentiment Analyzer\n`;
+    msg += `• 📈 *Quant Agent:* Volume, Liquidity & Orderflow Predictor\n`;
+    msg += `• ⚡ *Sniper Agent:* Sub-second Jito MEV Bundle & Copy Execution\n\n`;
+
+    msg += `💳 *Agentic Autonomous Funding:*\n`;
+    msg += `• Embedded Agent Wallet: \`${userWallet.publicKey.slice(0, 6)}...${userWallet.publicKey.slice(-6)}\`\n`;
+    msg += `• Live Balance: *${userWallet.balanceSol.toFixed(4)} SOL* (~$${userWallet.balanceUsd.toFixed(2)} USD)\n\n`;
+    msg += `💡 _Fund your agent wallet with Apple Pay / Card via Coinbase Onramp to enable autonomous execution._`;
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: '🤖 Convene AI Council', callback_data: 'swarm:search' },
+          { text: '💳 Fund Agent Wallet', url: onrampUrl },
+        ],
+        [
+          { text: '🚨 Bundle Detector', callback_data: 'nav:bundles' },
+          { text: '🐋 Whale Tracker', callback_data: 'nav:wallets' },
+        ],
+        [{ text: '⬅️ Back to Menu', callback_data: 'nav:main' }],
+      ],
+    };
+
+    await bot.sendMessage(chatId, msg, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+      disable_web_page_preview: true,
+    });
+  } catch (e) {
+    await bot.sendMessage(chatId, `❌ Failed to load Agentic Swarm: ${(e as Error).message}`, {
+      reply_markup: inlineBackButton('main'),
+    });
+  }
+}
+
 async function showMainMenu(chatId: number, customText?: string) {
   clearState(chatId);
 
@@ -1022,7 +1075,10 @@ bot.on('message', async (msg) => {
       break;
     case '🤖 AI Swarm':
     case '/swarm':
-      await showSwarmDashboard(chatId);
+    case '/agent':
+    case '/agentic':
+    case '/cdp':
+      await showAgenticDashboard(chatId);
       break;
     case '/bundleunsub':
       await prisma.bundleAlertSubscription.upsert({
@@ -1572,10 +1628,10 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  // AI Swarm Council Callbacks
-  if (data === 'nav:swarm') {
+  // AI Swarm & CDP Agentic Callbacks
+  if (data === 'nav:swarm' || data === 'nav:agent') {
     if (msgId) await bot.deleteMessage(chatId, msgId).catch(() => {});
-    await showSwarmDashboard(chatId);
+    await showAgenticDashboard(chatId);
     return;
   }
 
