@@ -173,6 +173,17 @@ export async function recordTradeReferralReward(
     }),
   ]);
 
+  // Award +300 AP on referee trade
+  try {
+    const { awardPoints } = await import('./points');
+    await awardPoints(
+      referrer.userChatId,
+      'REFERRAL_TRADE',
+      300,
+      `💎 Referred trader executed a swap ($${tradeVolumeUsd.toFixed(2)})`
+    );
+  } catch {}
+
   return {
     rewarded: true,
     rewardAmountUsd,
@@ -189,4 +200,45 @@ export async function updatePayoutWallet(userChatId: string | number, walletAddr
     where: { userChatId: chatIdStr },
     data: { payoutWallet: walletAddress.trim() },
   });
+}
+
+/**
+ * Request payout of accumulated referral commissions.
+ */
+export async function requestPayout(userChatId: string | number): Promise<{ success: boolean; message: string; amountUsd?: number }> {
+  const chatIdStr = String(userChatId);
+  const user = await prisma.referralUser.findUnique({
+    where: { userChatId: chatIdStr },
+  });
+
+  if (!user) return { success: false, message: 'User not found' };
+
+  const unclaimed = Number(user.unclaimedEarningsUsd || 0);
+  if (unclaimed <= 0) {
+    return {
+      success: false,
+      message: `📭 No commissions to claim right now. Invite friends to start earning!`,
+      amountUsd: 0,
+    };
+  }
+
+  if (!user.payoutWallet) {
+    return {
+      success: false,
+      message: `⚠️ Please set your Solana payout wallet address first before requesting payout.`,
+      amountUsd: unclaimed,
+    };
+  }
+
+  // Reset unclaimed balance
+  await prisma.referralUser.update({
+    where: { userChatId: chatIdStr },
+    data: { unclaimedEarningsUsd: 0 },
+  });
+
+  return {
+    success: true,
+    message: `✅ Payout request of $${unclaimed.toFixed(4)} USD submitted to \`${user.payoutWallet}\`.`,
+    amountUsd: unclaimed,
+  };
 }
